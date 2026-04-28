@@ -13,6 +13,7 @@ import { tasksRouter } from "./modules/tasks/tasks.routes";
 
 export const app = express();
 
+app.set("trust proxy", 1);
 app.use(helmet());
 app.use(corsOptions);
 app.use(morgan("dev"));
