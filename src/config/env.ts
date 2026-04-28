@@ -7,6 +7,7 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default("1d"),
   COOKIE_NAME: z.string().default("access_token"),
   BACKEND_PORT: z.coerce.number().default(4000),
+  BACKEND_URL: z.string().url().optional(),
   FRONTEND_URL: z.string().url("FRONTEND_URL must be a valid URL"),
 });
 
