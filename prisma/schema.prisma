@@ -25,6 +25,21 @@ enum TaskPriority {
   HIGH
 }
 
+enum MeetingStatus {
+  SCHEDULED
+  IN_PROGRESS
+  ENDED
+  PROCESSED
+  FAILED
+}
+
+enum SuggestionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EDITED
+}
+
 model Role {
   id    Int      @id @default(autoincrement())
   name  RoleName @unique
@@ -32,19 +47,22 @@ model Role {
 }
 
 model User {
-  id           String          @id @default(uuid())
-  name         String
-  email        String          @unique
-  passwordHash String
-  roleId       Int
-  isActive     Boolean         @default(true)
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  role         Role            @relation(fields: [roleId], references: [id])
-  projects     Project[]       @relation("ProjectCreator")
-  memberships  ProjectMember[]
-  tasksCreated Task[]          @relation("TaskCreator")
-  tasksOwned   Task[]          @relation("TaskResponsible")
+  id                    String               @id @default(uuid())
+  name                  String
+  email                 String               @unique
+  passwordHash          String
+  roleId                Int
+  isActive              Boolean              @default(true)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  role                  Role                 @relation(fields: [roleId], references: [id])
+  projects              Project[]            @relation("ProjectCreator")
+  memberships           ProjectMember[]
+  tasksCreated          Task[]               @relation("TaskCreator")
+  tasksOwned            Task[]               @relation("TaskResponsible")
+  meetingsCreated       Meeting[]            @relation("MeetingCreator")
+  meetingParticipations MeetingParticipant[]
+  suggestedTasks        TaskSuggestion[]     @relation("SuggestedResponsible")
 }
 
 model Project {
@@ -58,6 +76,7 @@ model Project {
   createdBy   User            @relation("ProjectCreator", fields: [createdById], references: [id])
   members     ProjectMember[]
   tasks       Task[]
+  meetings    Meeting[]
 }
 
 model ProjectMember {
@@ -74,18 +93,89 @@ model ProjectMember {
 }
 
 model Task {
-  id            String       @id @default(uuid())
-  title         String
-  description   String?
-  dueDate       DateTime?
-  priority      TaskPriority @default(MEDIUM)
-  status        TaskStatus   @default(PENDING)
-  projectId     String
-  createdById   String
-  responsibleId String?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  project       Project      @relation(fields: [projectId], references: [id])
-  createdBy     User         @relation("TaskCreator", fields: [createdById], references: [id])
-  responsible   User?        @relation("TaskResponsible", fields: [responsibleId], references: [id])
+  id             String          @id @default(uuid())
+  title          String
+  description    String?
+  dueDate        DateTime?
+  priority       TaskPriority    @default(MEDIUM)
+  status         TaskStatus      @default(PENDING)
+  projectId      String
+  createdById    String
+  responsibleId  String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  project        Project         @relation(fields: [projectId], references: [id])
+  createdBy      User            @relation("TaskCreator", fields: [createdById], references: [id])
+  responsible    User?           @relation("TaskResponsible", fields: [responsibleId], references: [id])
+  taskSuggestion TaskSuggestion?
+}
+
+model Meeting {
+  id           String               @id @default(uuid())
+  title        String
+  description  String?
+  projectId    String
+  createdById  String
+  status       MeetingStatus        @default(SCHEDULED)
+  scheduledAt  DateTime?
+  startedAt    DateTime?
+  endedAt      DateTime?
+  audioUrl     String?
+  errorMessage String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  project      Project              @relation(fields: [projectId], references: [id])
+  createdBy    User                 @relation("MeetingCreator", fields: [createdById], references: [id])
+  participants MeetingParticipant[]
+  minute       Minute?
+}
+
+model MeetingParticipant {
+  id        String    @id @default(uuid())
+  meetingId String
+  userId    String
+  joinedAt  DateTime?
+  leftAt    DateTime?
+  meeting   Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@unique([meetingId, userId])
+}
+
+model Minute {
+  id              String           @id @default(uuid())
+  meetingId       String           @unique
+  transcript      String
+  summary         String
+  keyPoints       String[]
+  language        String           @default("es")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  meeting         Meeting          @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  agreements      Agreement[]
+  taskSuggestions TaskSuggestion[]
+}
+
+model Agreement {
+  id       String @id @default(uuid())
+  minuteId String
+  text     String
+  order    Int
+  minute   Minute @relation(fields: [minuteId], references: [id], onDelete: Cascade)
+}
+
+model TaskSuggestion {
+  id             String           @id @default(uuid())
+  minuteId       String
+  title          String
+  description    String?
+  priority       TaskPriority     @default(MEDIUM)
+  suggestedForId String?
+  status         SuggestionStatus @default(PENDING)
+  taskId         String?          @unique
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  minute         Minute           @relation(fields: [minuteId], references: [id], onDelete: Cascade)
+  suggestedFor   User?            @relation("SuggestedResponsible", fields: [suggestedForId], references: [id])
+  task           Task?            @relation(fields: [taskId], references: [id])
 }
