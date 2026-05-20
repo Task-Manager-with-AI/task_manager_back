@@ -13,12 +13,6 @@ enum RoleName {
   GUEST
 }
 
-enum TaskStatus {
-  PENDING
-  IN_PROGRESS
-  DONE
-}
-
 enum TaskPriority {
   LOW
   MEDIUM
@@ -31,6 +25,18 @@ enum MeetingStatus {
   ENDED
   PROCESSED
   FAILED
+}
+
+enum MeetingType {
+  REGULAR
+  DAILY
+  SPRINT_PLANNING
+}
+
+enum SprintHealth {
+  GREEN
+  YELLOW
+  RED
 }
 
 enum SuggestionStatus {
@@ -74,9 +80,25 @@ model Project {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
   createdBy   User            @relation("ProjectCreator", fields: [createdById], references: [id])
-  members     ProjectMember[]
-  tasks       Task[]
-  meetings    Meeting[]
+  members       ProjectMember[]
+  tasks         Task[]
+  meetings      Meeting[]
+  kanbanColumns KanbanColumn[]
+}
+
+model KanbanColumn {
+  id        String   @id @default(uuid())
+  projectId String
+  title     String
+  position  Int
+  color     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@unique([projectId, position])
+  @@index([projectId])
 }
 
 model ProjectMember {
@@ -98,36 +120,42 @@ model Task {
   description    String?
   dueDate        DateTime?
   priority       TaskPriority    @default(MEDIUM)
-  status         TaskStatus      @default(PENDING)
+  columnId       String
   projectId      String
   createdById    String
   responsibleId  String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   project        Project         @relation(fields: [projectId], references: [id])
+  column         KanbanColumn    @relation(fields: [columnId], references: [id])
   createdBy      User            @relation("TaskCreator", fields: [createdById], references: [id])
   responsible    User?           @relation("TaskResponsible", fields: [responsibleId], references: [id])
   taskSuggestion TaskSuggestion?
+
+  @@index([columnId])
 }
 
 model Meeting {
-  id           String               @id @default(uuid())
-  title        String
-  description  String?
-  projectId    String
-  createdById  String
-  status       MeetingStatus        @default(SCHEDULED)
-  scheduledAt  DateTime?
-  startedAt    DateTime?
-  endedAt      DateTime?
-  audioUrl     String?
-  errorMessage String?
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  project      Project              @relation(fields: [projectId], references: [id])
-  createdBy    User                 @relation("MeetingCreator", fields: [createdById], references: [id])
-  participants MeetingParticipant[]
-  minute       Minute?
+  id            String               @id @default(uuid())
+  title         String
+  description   String?
+  projectId     String
+  createdById   String
+  status        MeetingStatus        @default(SCHEDULED)
+  meetingType   MeetingType          @default(REGULAR)
+  scheduledAt   DateTime?
+  startedAt     DateTime?
+  endedAt       DateTime?
+  audioUrl      String?
+  errorMessage  String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  project       Project              @relation(fields: [projectId], references: [id])
+  createdBy     User                 @relation("MeetingCreator", fields: [createdById], references: [id])
+  participants  MeetingParticipant[]
+  minute        Minute?
+  dailyAnalysis DailyAnalysis?
+  kanbanUpdates AutoKanbanUpdate[]
 }
 
 model MeetingParticipant {
@@ -178,4 +206,43 @@ model TaskSuggestion {
   minute         Minute           @relation(fields: [minuteId], references: [id], onDelete: Cascade)
   suggestedFor   User?            @relation("SuggestedResponsible", fields: [suggestedForId], references: [id])
   task           Task?            @relation(fields: [taskId], references: [id])
+}
+
+model DailyAnalysis {
+  id              String       @id @default(uuid())
+  meetingId       String       @unique
+  sprintHealth    SprintHealth @default(GREEN)
+  overallBlockers String[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  meeting         Meeting      @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  entries         DailyEntry[]
+}
+
+model DailyEntry {
+  id              String        @id @default(uuid())
+  dailyAnalysisId String
+  participantName String
+  yesterday       String
+  today           String
+  blockers        String[]
+  dailyAnalysis   DailyAnalysis @relation(fields: [dailyAnalysisId], references: [id], onDelete: Cascade)
+
+  @@index([dailyAnalysisId])
+}
+
+model AutoKanbanUpdate {
+  id          String   @id @default(uuid())
+  meetingId   String
+  taskId      String?
+  taskTitle   String
+  newStatus   String
+  mentionedBy String
+  confidence  Float
+  notes       String?
+  applied     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
 }

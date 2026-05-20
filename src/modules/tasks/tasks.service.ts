@@ -3,13 +3,15 @@ import { AppError } from "../../shared/errors/AppError";
 import {
   findTasksByProject,
   findTaskWithMembership,
+  findFirstColumnId,
   createTask,
   updateTask,
-  updateTaskStatus,
+  updateTaskColumn,
   deleteTask,
 } from "./tasks.repository";
-import type { CreateTaskDto, UpdateTaskDto, UpdateStatusDto } from "./tasks.schema";
-import { TaskPriority, TaskStatus } from "@prisma/client";
+import { findColumnById } from "../kanban/kanban.repository";
+import type { CreateTaskDto, UpdateTaskDto, UpdateColumnDto } from "./tasks.schema";
+import { TaskPriority } from "@prisma/client";
 
 export async function listProjectTasks(projectId: string) {
   return findTasksByProject(projectId);
@@ -37,12 +39,24 @@ export async function createNewTask(
     }
   }
 
+  let columnId = dto.columnId;
+  if (columnId) {
+    const column = await findColumnById(columnId, projectId);
+    if (!column) throw new AppError("Column not found in this project", 400);
+  } else {
+    columnId = (await findFirstColumnId(projectId)) ?? undefined;
+    if (!columnId) {
+      throw new AppError("Kanban columns are not configured for this project", 500);
+    }
+  }
+
   return createTask({
     title: dto.title,
     description: dto.description,
     dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
     priority: dto.priority as TaskPriority,
     projectId,
+    columnId,
     createdById,
     responsibleId: dto.responsibleId,
   });
@@ -76,14 +90,18 @@ export async function updateExistingTask(
   });
 }
 
-export async function changeTaskStatus(
+export async function changeTaskColumn(
   taskId: string,
   userId: string,
-  dto: UpdateStatusDto
+  dto: UpdateColumnDto
 ) {
   const task = await findTaskWithMembership(taskId, userId);
   if (!task) throw new AppError("Task not found or access denied", 404);
-  return updateTaskStatus(taskId, dto.status as TaskStatus);
+
+  const column = await findColumnById(dto.columnId, task.projectId);
+  if (!column) throw new AppError("Column not found in this project", 400);
+
+  return updateTaskColumn(taskId, dto.columnId);
 }
 
 export async function removeTask(taskId: string, userId: string) {

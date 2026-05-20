@@ -27,8 +27,14 @@ export async function readAudio(audioUrl: string): Promise<Buffer> {
 export function inferExtensionFromMime(mimeType: string): string {
   if (mimeType.includes("webm")) return "webm";
   if (mimeType.includes("ogg")) return "ogg";
-  if (mimeType.includes("mp4") || mimeType.includes("m4a")) return "m4a";
-  if (mimeType.includes("wav")) return "wav";
+  if (mimeType.includes("mp4")) return "mp4";
+  if (mimeType.includes("m4a") || mimeType.includes("x-m4a")) return "m4a";
+  if (mimeType.includes("wav") || mimeType.includes("x-wav")) return "wav";
   if (mimeType.includes("mpeg") || mimeType.includes("mp3")) return "mp3";
+  if (mimeType.includes("flac") || mimeType.includes("x-flac")) return "flac";
+  if (mimeType.includes("aac") || mimeType.includes("x-aac")) return "aac";
+  if (mimeType.includes("quicktime") || mimeType.includes("mov")) return "mov";
+  if (mimeType.includes("x-msvideo") || mimeType.includes("avi")) return "avi";
+  if (mimeType.includes("x-matroska") || mimeType.includes("mkv")) return "mkv";
   return "webm";
 }

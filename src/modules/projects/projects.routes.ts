@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { membershipMiddleware } from "../../middlewares/membership.middleware";
+import { kanbanRouter } from "../kanban/kanban.routes";
 import {
   listProjectsController,
   getProjectController,
@@ -73,6 +74,8 @@ projectsRouter.post("/", authMiddleware, createProjectController);
  *       403:
  *         description: Not a member
  */
+projectsRouter.use("/:id/kanban", kanbanRouter);
+
 projectsRouter.get("/:id", authMiddleware, membershipMiddleware, getProjectController);
 
 /**

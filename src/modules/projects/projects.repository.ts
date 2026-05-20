@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../prisma/client";
+import { seedDefaultKanbanColumns } from "../../shared/kanban/defaults";
 
 export async function findProjectsByUser(userId: string) {
   return prisma.project.findMany({
@@ -35,6 +36,7 @@ export async function createProject(data: {
     await tx.projectMember.create({
       data: { userId: data.createdById, projectId: project.id, memberRole: "ADMIN" },
     });
+    await seedDefaultKanbanColumns(tx, project.id);
     return project;
   });
 }

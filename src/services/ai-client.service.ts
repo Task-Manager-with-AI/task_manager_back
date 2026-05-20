@@ -31,6 +31,59 @@ export interface SuggestionsResult {
   suggestions: AiSuggestion[];
 }
 
+export interface DetectTypeResult {
+  meeting_type: "DAILY" | "SPRINT_PLANNING" | "REGULAR";
+  confidence: number;
+  reason: string;
+}
+
+export interface DailyEntry {
+  participant_name: string;
+  yesterday: string;
+  today: string;
+  blockers: string[];
+}
+
+export interface AnalyzeDailyResult {
+  entries: DailyEntry[];
+  overall_blockers: string[];
+  sprint_health: "GREEN" | "YELLOW" | "RED";
+}
+
+export interface SprintTask {
+  title: string;
+  description?: string | null;
+  priority: "LOW" | "MEDIUM" | "HIGH";
+  suggested_responsible_id?: string | null;
+  story_points?: number | null;
+}
+
+export interface AnalyzeSprintResult {
+  sprint_goal: string;
+  sprint_duration_weeks?: number | null;
+  user_stories: string[];
+  tasks: SprintTask[];
+}
+
+export interface KanbanUpdate {
+  task_id?: string | null;
+  task_title: string;
+  new_status: "DONE" | "IN_PROGRESS" | "BLOCKED";
+  mentioned_by: string;
+  confidence: number;
+  notes?: string | null;
+}
+
+export interface DetectKanbanUpdatesResult {
+  updates: KanbanUpdate[];
+}
+
+export interface ExistingTaskInput {
+  id: string;
+  title: string;
+  column_title: string;
+}
+
 async function readWrapped<T>(res: Response, label: string): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as {
     success?: boolean;
@@ -92,4 +145,59 @@ export async function extractSuggestions(input: {
     body: JSON.stringify({ language: "es", ...input }),
   });
   return readWrapped<SuggestionsResult>(res, "task suggestions");
+}
+
+export async function detectMeetingType(input: {
+  transcript: string;
+  meeting_title: string;
+  participants: string[];
+  language?: string;
+}): Promise<DetectTypeResult> {
+  const res = await fetch(`${baseUrl}/api/v1/detect-type`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ language: "es", ...input }),
+  });
+  return readWrapped<DetectTypeResult>(res, "meeting type detection");
+}
+
+export async function analyzeDaily(input: {
+  transcript: string;
+  participants: string[];
+  language?: string;
+}): Promise<AnalyzeDailyResult> {
+  const res = await fetch(`${baseUrl}/api/v1/analyze-daily`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ language: "es", ...input }),
+  });
+  return readWrapped<AnalyzeDailyResult>(res, "daily analysis");
+}
+
+export async function analyzeSprintPlanning(input: {
+  transcript: string;
+  meeting_title: string;
+  participants: string[];
+  project_members: { id: string; name: string }[];
+  language?: string;
+}): Promise<AnalyzeSprintResult> {
+  const res = await fetch(`${baseUrl}/api/v1/analyze-sprint`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ language: "es", ...input }),
+  });
+  return readWrapped<AnalyzeSprintResult>(res, "sprint planning analysis");
+}
+
+export async function detectKanbanUpdates(input: {
+  transcript: string;
+  existing_tasks: ExistingTaskInput[];
+  language?: string;
+}): Promise<DetectKanbanUpdatesResult> {
+  const res = await fetch(`${baseUrl}/api/v1/detect-kanban-updates`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ language: "es", ...input }),
+  });
+  return readWrapped<DetectKanbanUpdatesResult>(res, "kanban updates detection");
 }

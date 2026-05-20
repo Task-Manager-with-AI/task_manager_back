@@ -16,7 +16,13 @@ const minuteInclude = {
   taskSuggestions: {
     include: {
       suggestedFor: { select: userSelect },
-      task: { select: { id: true, title: true, status: true } },
+      task: {
+        select: {
+          id: true,
+          title: true,
+          column: { select: { id: true, title: true } },
+        },
+      },
     },
     orderBy: { createdAt: "asc" as const },
   },

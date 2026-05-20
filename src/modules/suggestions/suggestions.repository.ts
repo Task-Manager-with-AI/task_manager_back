@@ -4,7 +4,13 @@ const userSelect = { id: true, name: true, email: true };
 
 const suggestionInclude = {
   suggestedFor: { select: userSelect },
-  task: { select: { id: true, title: true, status: true } },
+  task: {
+    select: {
+      id: true,
+      title: true,
+      column: { select: { id: true, title: true } },
+    },
+  },
   minute: {
     select: {
       id: true,

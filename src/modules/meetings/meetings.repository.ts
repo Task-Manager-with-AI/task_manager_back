@@ -1,5 +1,5 @@
 import { prisma } from "../../prisma/client";
-import { MeetingStatus } from "@prisma/client";
+import { MeetingStatus, MeetingType } from "@prisma/client";
 
 const userSelect = { id: true, name: true, email: true };
 
@@ -8,6 +8,7 @@ const meetingInclude = {
   participants: { include: { user: { select: userSelect } } },
   project: { select: { id: true, name: true } },
   minute: { select: { id: true, summary: true } },
+  dailyAnalysis: { select: { id: true, sprintHealth: true } },
 };
 
 export async function findMeetingsByProject(projectId: string) {
@@ -65,6 +66,7 @@ export async function updateMeetingStatus(
   meetingId: string,
   data: {
     status?: MeetingStatus;
+    meetingType?: MeetingType;
     startedAt?: Date;
     endedAt?: Date;
     audioUrl?: string;
@@ -75,6 +77,26 @@ export async function updateMeetingStatus(
     where: { id: meetingId },
     data,
     include: meetingInclude,
+  });
+}
+
+export async function findAllMeetingsForUser(userId: string) {
+  return prisma.meeting.findMany({
+    where: {
+      project: {
+        members: { some: { userId, isActive: true } },
+      },
+    },
+    include: meetingInclude,
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+}
+
+export async function findDailyAnalysisByMeeting(meetingId: string) {
+  return prisma.dailyAnalysis.findUnique({
+    where: { meetingId },
+    include: { entries: true },
   });
 }
 
