@@ -3,8 +3,9 @@ node_modules/
 # Build output
 dist/
 coverage/
+*.tsbuildinfo
 
-# Environment files
+# Environment files (never commit secrets)
 .env
 .env.*
 !.env.example
@@ -15,9 +16,31 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+dev-server-*.log
+dev-server-*.err
 
 # OS and editor files
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
+*~
 .vscode/
 .idea/
+
+# Local binaries / tooling
+bin/
+
+# Meeting audio uploads (runtime data, not source code)
+public/uploads/audio/*
+!public/uploads/audio/.gitkeep
+/uploads/
+
+# Prisma local DB dumps (if any)
+*.db
+*.db-journal
+
+# Temp / scratch
+tmp/
+temp/
+*.tmp

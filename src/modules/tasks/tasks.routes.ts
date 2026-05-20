@@ -6,7 +6,7 @@ import {
   getTaskController,
   createTaskController,
   updateTaskController,
-  updateStatusController,
+  updateColumnController,
   deleteTaskController,
 } from "./tasks.controller";
 
@@ -127,10 +127,10 @@ tasksRouter.patch("/tasks/:id", authMiddleware, updateTaskController);
 
 /**
  * @openapi
- * /tasks/{id}/status:
+ * /tasks/{id}/column:
  *   patch:
  *     tags: [Tasks]
- *     summary: Update task status only
+ *     summary: Move task to another Kanban column
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -145,16 +145,16 @@ tasksRouter.patch("/tasks/:id", authMiddleware, updateTaskController);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [status]
+ *             required: [columnId]
  *             properties:
- *               status:
+ *               columnId:
  *                 type: string
- *                 enum: [PENDING, IN_PROGRESS, DONE]
+ *                 format: uuid
  *     responses:
  *       200:
- *         description: Status updated
+ *         description: Column updated
  */
-tasksRouter.patch("/tasks/:id/status", authMiddleware, updateStatusController);
+tasksRouter.patch("/tasks/:id/column", authMiddleware, updateColumnController);
 
 /**
  * @openapi

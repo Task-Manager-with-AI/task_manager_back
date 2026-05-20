@@ -1,10 +1,11 @@
 import { prisma } from "../../prisma/client";
-import { Prisma, TaskPriority, TaskStatus } from "@prisma/client";
+import { TaskPriority } from "@prisma/client";
 
 const taskInclude = {
   createdBy: { select: { id: true, name: true, email: true } },
   responsible: { select: { id: true, name: true, email: true } },
   project: { select: { id: true, name: true } },
+  column: { select: { id: true, title: true, color: true, position: true } },
 };
 
 export async function findTasksByProject(projectId: string) {
@@ -29,12 +30,22 @@ export async function findTaskWithMembership(taskId: string, userId: string) {
   });
 }
 
+export async function findFirstColumnId(projectId: string) {
+  const column = await prisma.kanbanColumn.findFirst({
+    where: { projectId },
+    orderBy: { position: "asc" },
+    select: { id: true },
+  });
+  return column?.id ?? null;
+}
+
 export async function createTask(data: {
   title: string;
   description?: string;
   dueDate?: Date;
   priority: TaskPriority;
   projectId: string;
+  columnId: string;
   createdById: string;
   responsibleId?: string;
 }) {
@@ -54,8 +65,8 @@ export async function updateTask(
   return prisma.task.update({ where: { id }, data, include: taskInclude });
 }
 
-export async function updateTaskStatus(id: string, status: TaskStatus) {
-  return prisma.task.update({ where: { id }, data: { status }, include: taskInclude });
+export async function updateTaskColumn(id: string, columnId: string) {
+  return prisma.task.update({ where: { id }, data: { columnId }, include: taskInclude });
 }
 
 export async function deleteTask(id: string) {

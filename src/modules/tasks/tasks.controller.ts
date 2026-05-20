@@ -2,14 +2,14 @@ import { Request, Response, NextFunction } from "express";
 import {
   createTaskSchema,
   updateTaskSchema,
-  updateStatusSchema,
+  updateColumnSchema,
 } from "./tasks.schema";
 import {
   listProjectTasks,
   getTask,
   createNewTask,
   updateExistingTask,
-  changeTaskStatus,
+  changeTaskColumn,
   removeTask,
 } from "./tasks.service";
 import { sendSuccess, sendCreated } from "../../shared/utils/response";
@@ -68,15 +68,15 @@ export async function updateTaskController(
   }
 }
 
-export async function updateStatusController(
+export async function updateColumnController(
   req: Request,
   res: Response,
   next: NextFunction
 ) {
   try {
-    const dto = updateStatusSchema.parse(req.body);
-    const task = await changeTaskStatus(req.params["id"] as string, req.user!.id, dto);
-    sendSuccess(res, task, "Status updated");
+    const dto = updateColumnSchema.parse(req.body);
+    const task = await changeTaskColumn(req.params["id"] as string, req.user!.id, dto);
+    sendSuccess(res, task, "Task column updated");
   } catch (err) {
     next(err);
   }

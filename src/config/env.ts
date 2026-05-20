@@ -9,6 +9,8 @@ const envSchema = z.object({
   BACKEND_PORT: z.coerce.number().default(4000),
   BACKEND_URL: z.string().url().optional(),
   FRONTEND_URL: z.string().url("FRONTEND_URL must be a valid URL"),
+  AI_BACKEND_URL: z.string().url().default("http://localhost:8000"),
+  AUDIO_UPLOAD_DIR: z.string().default("./public/uploads/audio"),
 });
 
 const parsed = envSchema.safeParse(process.env);
