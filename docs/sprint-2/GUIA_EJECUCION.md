@@ -146,9 +146,18 @@ La primera vez que el AI backend transcriba, descargará automáticamente el mod
 ```env
 AI_BACKEND_URL=http://localhost:8000
 AUDIO_UPLOAD_DIR=./public/uploads/audio
+
+# Opcional: almacenamiento privado en AWS S3 para audios/videos de reuniones.
+# Si AWS_REGION y AWS_S3_BUCKET existen, el backend usa S3.
+# Si faltan, usa AUDIO_UPLOAD_DIR como fallback local.
+AWS_REGION=us-east-1
+AWS_S3_BUCKET=gestionagil-331145994790-us-east-1-an
+AWS_S3_AUDIO_PREFIX=meetings/audio
+AWS_ACCESS_KEY_ID=tu_access_key_id
+AWS_SECRET_ACCESS_KEY=tu_secret_access_key
 ```
 
-No necesitas tocar nada más si Postgres está en `localhost:5432`.
+No necesitas tocar nada mas si Postgres esta en `localhost:5432`. Para desarrollo sin S3, deja comentadas o vacias las variables AWS y el audio se guardara en `AUDIO_UPLOAD_DIR`.
 
 ---
 
@@ -195,6 +204,8 @@ Abre: `http://localhost:3000`
 9. Habla unos 30 segundos como mínimo (la IA necesita contenido para extraer acuerdos).
 10. Click en **"Terminar"**:
     - El audio se sube al backend.
+    - Si S3 esta configurado, el audio queda como objeto privado en `meetings/audio/`.
+    - Si S3 no esta configurado, el audio queda en `public/uploads/audio/`.
     - Se inicia el pipeline AI (transcripción → minutas → sugerencias).
     - Verás un loader: "Procesando audio y generando minutas..."
     - Cuando termine (30 segundos a varios minutos según duración), te redirige automáticamente a `/meetings/{id}/minutes`.
@@ -202,6 +213,17 @@ Abre: `http://localhost:3000`
     - Resumen + puntos clave + acuerdos extraídos.
     - Lista de sugerencias de tareas con prioridad y responsable sugerido.
 12. **Acepta una sugerencia** → la tarea aparece automáticamente en el tablero **Kanban** del proyecto.
+
+### Verificacion de storage S3
+
+Si configuraste AWS S3:
+
+1. Abre el bucket `gestionagil-331145994790-us-east-1-an`.
+2. Entra al prefijo `meetings/audio/`.
+3. Confirma que exista un objeto con formato `{meetingId}-{suffix}.{extension}`.
+4. En la base de datos, `Meeting.audioUrl` debe tener formato `s3://bucket/key`.
+
+Si no configuraste S3, confirma que el archivo exista en `task_manager_back/public/uploads/audio/` y que `Meeting.audioUrl` tenga formato `/uploads/audio/{fileName}`.
 
 ---
 
@@ -228,6 +250,8 @@ Para verificar el flujo multi-usuario sin necesidad de dos computadoras:
 | El video local aparece pero no veo a otros | Asegúrate de que la otra pestaña abrió la misma reunión y aceptó permisos. Revisa la consola del browser. |
 | Socket.IO no conecta | Verifica que `next.config.mjs` tiene la rewrite `/socket.io/*` → backend. |
 | "No audio uploaded" en el estado FAILED | El MediaRecorder no llegó a grabar nada. Habla al menos 5 segundos antes de terminar. |
+| El audio no aparece en S3 | Verifica `AWS_REGION`, `AWS_S3_BUCKET`, credenciales IAM y permisos `s3:PutObject` sobre `meetings/audio/*`. |
+| S3 no configurado | El backend usa fallback local en `AUDIO_UPLOAD_DIR`; confirma que el archivo exista en `public/uploads/audio/`. |
 | Whisper local muy lento | Cambia a `LOCAL_WHISPER_MODEL=tiny` o `base`. Si tienes GPU: `LOCAL_WHISPER_DEVICE=cuda`. |
 | Migración Prisma falla | Verifica que Postgres está corriendo y `DATABASE_URL` es correcto. |
 
@@ -259,10 +283,10 @@ task_manager_back/
   src/
     server.ts                                      ← http.createServer + Socket.IO
     app.ts                                         ← +3 routers + static /uploads
-    config/env.ts                                  ← +AI_BACKEND_URL, AUDIO_UPLOAD_DIR
+    config/env.ts                                  ← +AI_BACKEND_URL, AUDIO_UPLOAD_DIR, AWS S3 opcional
     services/
       ai-client.service.ts                         ← cliente HTTP al AI backend
-      audio-storage.service.ts                     ← guardar/leer audio en disco
+      audio-storage.service.ts                     ← guardar/leer audio en S3 o fallback local
     signaling/
       signaling.server.ts                          ← Socket.IO con JWT auth + relay
     modules/

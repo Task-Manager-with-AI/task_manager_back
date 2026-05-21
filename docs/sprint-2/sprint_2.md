@@ -97,7 +97,7 @@ Desde un enfoque de ingenieria de software, este sprint se orienta a resolver tr
 - Una reunion puede tener varios participantes.
 - Una reunion puede tener cero o una minuta generada inicialmente.
 - El contenido de la reunion debe almacenarse de forma segura y versionable.
-- Si se carga audio, el archivo se almacena en un storage externo y la base de datos guarda solo la URL o clave del archivo.
+- Si se carga audio, el archivo se almacena en AWS S3 privado cuando esta configurado; la base de datos guarda solo la referencia `s3://bucket/key`. En desarrollo puede usarse almacenamiento local como fallback.
 
 ---
 
@@ -132,14 +132,14 @@ Desde un enfoque de ingenieria de software, este sprint se orienta a resolver tr
 - La minuta debe guardar el texto generado y los metadatos de procesamiento.
 - Se debe registrar fecha de generacion, usuario solicitante y version de la minuta.
 
-#### Contrato esperado del servicio IA
+#### Contrato actual del servicio IA (minutas)
 
 ```json
 {
-  "meetingId": 15,
-  "sourceType": "text",
-  "language": "es",
-  "content": "Texto o transcripcion de la reunion"
+    "transcript": "Texto o transcripcion de la reunion",
+    "meeting_title": "Sprint Planning 2",
+    "participants": ["Ana", "Luis"],
+    "language": "es"
 }
 ```
 
@@ -147,18 +147,14 @@ Respuesta esperada:
 
 ```json
 {
-  "summary": "Resumen ejecutivo de la reunion",
-  "topics": ["Tema 1", "Tema 2"],
-  "agreements": [
-    {
-      "title": "Acuerdo identificado",
-      "description": "Detalle del acuerdo",
-      "sourceFragment": "Fragmento de la reunion que origino el acuerdo"
-    }
-  ],
-  "decisions": ["Decision principal"],
-  "nextSteps": ["Proximo paso sugerido"],
-  "confidence": 0.87
+    "summary": "Resumen ejecutivo de la reunion",
+    "key_points": ["Punto clave 1", "Punto clave 2"],
+    "agreements": [
+        {
+            "order": 1,
+            "text": "Acuerdo identificado"
+        }
+    ]
 }
 ```
 
@@ -311,19 +307,17 @@ sequenceDiagram
         Backend->>Storage: Guarda audio
         Backend->>DB: Guarda referencia del archivo
     end
-    Usuario->>Frontend: Solicita generar minuta
-    Frontend->>Backend: POST /meetings/{id}/minutes/generate
-    Backend->>IA: Envia texto/transcripcion
-    IA-->>Backend: Retorna minuta estructurada
-    Backend->>DB: Guarda minuta y acuerdos
+    Usuario->>Frontend: Finaliza reunion
+    Frontend->>Backend: PATCH /meetings/{id}/end
+    Backend->>IA: Transcribe + detecta tipo + analiza
+    IA-->>Backend: Retorna minutos, sugerencias y analisis
+    Backend->>DB: Guarda minuta, acuerdos, sugerencias y analisis
+    Backend-->>Frontend: Notifica (Socket.IO) y habilita vistas
+    Usuario->>Frontend: Revisa minuta y sugerencias
+    Frontend->>Backend: GET /meetings/{id}/minutes
     Backend-->>Frontend: Muestra minuta generada
-    Usuario->>Frontend: Solicita sugerencias de tareas
-    Frontend->>Backend: POST /minutes/{id}/task-suggestions/generate
-    Backend->>IA: Solicita extraccion de acciones
-    IA-->>Backend: Retorna tareas sugeridas
-    Backend->>DB: Guarda sugerencias temporales
     Usuario->>Frontend: Acepta/Edita/Rechaza sugerencias
-    Frontend->>Backend: PATCH/POST sugerencias
+    Frontend->>Backend: PATCH /suggestions/{id}/accept|reject|update
     Backend->>DB: Crea tarea y trazabilidad si fue aceptada
 ```
 
@@ -335,26 +329,26 @@ sequenceDiagram
 
 | Id | Tarea | HU relacionada | Estimacion | Responsable | Estado |
 |---|---|---|---:|---|---|
-| SP2-01 | Refinar criterios de aceptacion y contratos tecnicos del Sprint 2 | HU-5, HU-6, HU-07, HU-08, HU-13 | 4 hrs | Alex Ticlla | Planificado |
-| SP2-02 | Disenar modelo de datos para reuniones, minutas, sugerencias y trazabilidad | HU-5, HU-6, HU-13 | 6 hrs | Alvaro Sonco | Planificado |
-| SP2-03 | Crear migraciones PostgreSQL para nuevas entidades | HU-5, HU-6, HU-07, HU-13 | 5 hrs | Alex Ticlla | Planificado |
-| SP2-04 | Implementar API REST para registro y consulta de reuniones | HU-5 | 8 hrs | Alvaro Sonco | Planificado |
-| SP2-05 | Implementar interfaz de registro de reunion y carga de contenido | HU-5 | 8 hrs | Alex Ticlla | Planificado |
-| SP2-06 | Crear servicio IA base en Python para procesamiento NLP | HU-6, HU-07 | 8 hrs | Alvaro Sonco | Planificado |
-| SP2-07 | Implementar adaptador de transcripcion o procesamiento de texto | HU-6 | 8 hrs | Alex Ticlla | Planificado |
-| SP2-08 | Implementar generacion de minuta estructurada | HU-6 | 10 hrs | Alvaro Sonco | Planificado |
-| SP2-09 | Integrar backend Node.js con servicio IA mediante API interna | HU-6, HU-07 | 8 hrs | Alex Ticlla | Planificado |
-| SP2-10 | Implementar persistencia de minutas, acuerdos y estados de procesamiento | HU-6 | 6 hrs | Alvaro Sonco | Planificado |
-| SP2-11 | Implementar extraccion de tareas sugeridas desde minuta | HU-07 | 10 hrs | Alex Ticlla | Planificado |
-| SP2-12 | Implementar reglas para responsable, fecha limite, prioridad y confianza | HU-07 | 6 hrs | Alvaro Sonco | Planificado |
-| SP2-13 | Disenar tarjetas temporales o traslucidas en frontend | HU-08 | 6 hrs | Alex Ticlla | Planificado |
-| SP2-14 | Implementar aceptar, rechazar y editar sugerencias | HU-08 | 8 hrs | Alvaro Sonco | Planificado |
-| SP2-15 | Crear tarea definitiva a partir de sugerencia aceptada | HU-08, HU-13 | 8 hrs | Alex Ticlla | Planificado |
-| SP2-16 | Implementar trazabilidad tarea-minuta-reunion-fragmento origen | HU-13 | 6 hrs | Alvaro Sonco | Planificado |
-| SP2-17 | Implementar manejo de errores, logs y auditoria basica | HU-6, HU-07, HU-08 | 5 hrs | Alex Ticlla | Planificado |
-| SP2-18 | Ejecutar pruebas unitarias de backend y servicio IA | Todas | 8 hrs | Alvaro Sonco | Planificado |
-| SP2-19 | Ejecutar pruebas de integracion del flujo completo | Todas | 8 hrs | Alex Ticlla / Alvaro Sonco | Planificado |
-| SP2-20 | Documentar endpoints, contratos JSON y procedimiento de pruebas | Todas | 4 hrs | Alex Ticlla | Planificado |
+| SP2-01 | Refinar criterios de aceptacion y contratos tecnicos del Sprint 2 | HU-5, HU-6, HU-07, HU-08, HU-13 | 4 hrs | Alex Ticlla | Completado |
+| SP2-02 | Disenar modelo de datos para reuniones, minutas, sugerencias y trazabilidad | HU-5, HU-6, HU-13 | 6 hrs | Alvaro Sonco | Completado |
+| SP2-03 | Crear migraciones PostgreSQL para nuevas entidades | HU-5, HU-6, HU-07, HU-13 | 5 hrs | Alex Ticlla | Completado |
+| SP2-04 | Implementar API REST para registro y consulta de reuniones | HU-5 | 8 hrs | Alvaro Sonco | Completado |
+| SP2-05 | Implementar interfaz de registro de reunion y carga de contenido | HU-5 | 8 hrs | Alex Ticlla | Completado |
+| SP2-06 | Crear servicio IA base en Python para procesamiento NLP | HU-6, HU-07 | 8 hrs | Alvaro Sonco | Completado |
+| SP2-07 | Implementar adaptador de transcripcion o procesamiento de texto | HU-6 | 8 hrs | Alex Ticlla | Completado |
+| SP2-08 | Implementar generacion de minuta estructurada | HU-6 | 10 hrs | Alvaro Sonco | Completado |
+| SP2-09 | Integrar backend Node.js con servicio IA mediante API interna | HU-6, HU-07 | 8 hrs | Alex Ticlla | Completado |
+| SP2-10 | Implementar persistencia de minutas, acuerdos y estados de procesamiento | HU-6 | 6 hrs | Alvaro Sonco | Completado |
+| SP2-11 | Implementar extraccion de tareas sugeridas desde minuta | HU-07 | 10 hrs | Alex Ticlla | Completado |
+| SP2-12 | Implementar reglas para responsable, fecha limite, prioridad y confianza | HU-07 | 6 hrs | Alvaro Sonco | Completado |
+| SP2-13 | Disenar tarjetas temporales o traslucidas en frontend | HU-08 | 6 hrs | Alex Ticlla | Completado |
+| SP2-14 | Implementar aceptar, rechazar y editar sugerencias | HU-08 | 8 hrs | Alvaro Sonco | Completado |
+| SP2-15 | Crear tarea definitiva a partir de sugerencia aceptada | HU-08, HU-13 | 8 hrs | Alex Ticlla | Completado |
+| SP2-16 | Implementar trazabilidad tarea-minuta-reunion-fragmento origen | HU-13 | 6 hrs | Alvaro Sonco | Completado |
+| SP2-17 | Implementar manejo de errores, logs y auditoria basica | HU-6, HU-07, HU-08 | 5 hrs | Alex Ticlla | En progreso |
+| SP2-18 | Ejecutar pruebas unitarias de backend y servicio IA | Todas | 8 hrs | Alvaro Sonco | Pendiente |
+| SP2-19 | Ejecutar pruebas de integracion del flujo completo | Todas | 8 hrs | Alex Ticlla / Alvaro Sonco | Pendiente |
+| SP2-20 | Documentar endpoints, contratos JSON y procedimiento de pruebas | Todas | 4 hrs | Alex Ticlla | Completado |
 
 **Total estimado:** 140 horas
 
@@ -419,28 +413,43 @@ flowchart TB
 | Backend API | Node.js + Express | Orquestar reglas de negocio, seguridad, persistencia e integracion IA |
 | Servicio IA | Python + FastAPI | Procesar texto/transcripcion, generar minutas y extraer tareas |
 | Base de datos | PostgreSQL | Guardar reuniones, minutas, sugerencias, tareas y trazabilidad |
-| Storage externo | Servicio compatible con objetos | Guardar audios o documentos pesados |
+| Storage externo | AWS S3 privado con fallback local | Guardar audios o documentos pesados sin persistir binarios en PostgreSQL |
 | Autenticacion | JWT | Proteger endpoints y validar usuario autenticado |
+
+#### Configuracion de storage de audio
+
+El backend Node usa S3 cuando existen `AWS_REGION` y `AWS_S3_BUCKET` en `task_manager_back/.env`. Si esas variables no estan configuradas, mantiene el fallback local en `AUDIO_UPLOAD_DIR`.
+
+```env
+AUDIO_UPLOAD_DIR=./public/uploads/audio
+AWS_REGION=us-east-1
+AWS_S3_BUCKET=gestionagil-331145994790-us-east-1-an
+AWS_S3_AUDIO_PREFIX=meetings/audio
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+```
+
+El formato de los objetos en S3 es `meetings/audio/{meetingId}-{suffix}.{extension}` y el campo `Meeting.audioUrl` guarda `s3://{bucket}/{key}`. Los objetos son privados; en esta fase no se generan URLs publicas ni URLs firmadas.
 
 ### 3. Endpoints principales
 
 | Metodo | Endpoint | Descripcion |
 |---|---|---|
-| POST | `/api/meetings` | Crear una reunion |
-| GET | `/api/projects/{projectId}/meetings` | Listar reuniones por proyecto |
-| GET | `/api/meetings/{meetingId}` | Consultar detalle de una reunion |
-| PATCH | `/api/meetings/{meetingId}` | Editar datos de reunion |
-| POST | `/api/meetings/{meetingId}/content` | Registrar texto, notas o referencia de audio |
-| POST | `/api/meetings/{meetingId}/minutes/generate` | Solicitar generacion de minuta con IA |
-| GET | `/api/meetings/{meetingId}/minutes` | Consultar minuta generada |
-| PATCH | `/api/minutes/{minuteId}` | Editar minuta |
-| PATCH | `/api/minutes/{minuteId}/validate` | Validar minuta por el usuario |
-| POST | `/api/minutes/{minuteId}/task-suggestions/generate` | Generar sugerencias de tareas |
-| GET | `/api/minutes/{minuteId}/task-suggestions` | Listar sugerencias de una minuta |
-| PATCH | `/api/task-suggestions/{suggestionId}` | Editar sugerencia |
-| POST | `/api/task-suggestions/{suggestionId}/accept` | Convertir sugerencia en tarea definitiva |
-| POST | `/api/task-suggestions/{suggestionId}/reject` | Rechazar sugerencia |
-| GET | `/api/tasks/{taskId}/traceability` | Consultar origen de una tarea generada desde minuta |
+| POST | `/api/v1/projects/{projectId}/meetings` | Crear una reunion |
+| GET | `/api/v1/projects/{projectId}/meetings` | Listar reuniones por proyecto |
+| GET | `/api/v1/meetings` | Listar reuniones del usuario (todos los proyectos) |
+| GET | `/api/v1/meetings/{meetingId}` | Consultar detalle de una reunion |
+| PATCH | `/api/v1/meetings/{meetingId}/start` | Marcar reunion como en curso |
+| POST | `/api/v1/meetings/{meetingId}/audio` | Subir audio de la reunion |
+| PATCH | `/api/v1/meetings/{meetingId}/end` | Finalizar reunion y disparar pipeline IA |
+| GET | `/api/v1/meetings/{meetingId}/minutes` | Consultar minuta generada |
+| GET | `/api/v1/meetings/{meetingId}/daily` | Consultar analisis Daily Scrum |
+| GET | `/api/v1/meetings/{meetingId}/kanban-updates` | Consultar actualizaciones de Kanban |
+| GET | `/api/v1/minutes/{minuteId}` | Consultar minuta por ID |
+| GET | `/api/v1/minutes/{minuteId}/suggestions` | Listar sugerencias de una minuta |
+| PATCH | `/api/v1/suggestions/{suggestionId}` | Editar sugerencia |
+| PATCH | `/api/v1/suggestions/{suggestionId}/accept` | Convertir sugerencia en tarea definitiva |
+| PATCH | `/api/v1/suggestions/{suggestionId}/reject` | Rechazar sugerencia |
 
 ### 4. Diseno de datos
 
@@ -722,6 +731,8 @@ stateDiagram-v2
 - Validar JWT en todos los endpoints del Sprint 2.
 - Verificar que el usuario pertenezca al proyecto antes de consultar reuniones o minutas.
 - Limitar tipo y tamano de archivos de audio permitidos.
+- Mantener el bucket S3 privado y usar IAM con permisos minimos para `PutObject` y `GetObject` bajo el prefijo de audios.
+- No registrar credenciales AWS ni URLs con informacion sensible en logs o repositorios.
 - Registrar errores de procesamiento IA sin exponer informacion sensible al cliente.
 - Usar transacciones al aceptar sugerencias para evitar inconsistencias entre tarea y trazabilidad.
 - Guardar evidencia textual del fragmento origen para asegurar auditabilidad.
@@ -771,6 +782,8 @@ stateDiagram-v2
 |---|---|---|---|
 | INT2-01 | Reunion -> Minuta | Usuario registra reunion con texto y solicita minuta | La minuta se genera y queda asociada a la reunion |
 | INT2-02 | Reunion con audio -> Minuta | Usuario carga audio y se procesa transcripcion | El sistema genera minuta desde la transcripcion |
+| INT2-02A | Storage S3 | Usuario carga audio con `AWS_REGION` y `AWS_S3_BUCKET` configurados | El audio se guarda en S3 bajo `meetings/audio/` y `Meeting.audioUrl` queda como `s3://bucket/key` |
+| INT2-02B | Fallback local | Usuario carga audio sin variables S3 configuradas | El audio se guarda en `AUDIO_UPLOAD_DIR` y el procesamiento IA lee el archivo local |
 | INT2-03 | Minuta -> Sugerencias | Usuario genera tareas sugeridas desde minuta | El sistema lista sugerencias con estado `sugerida` |
 | INT2-04 | Sugerencia -> Tarea | Usuario acepta una sugerencia | La tarea aparece en el Kanban como tarea definitiva |
 | INT2-05 | Rechazo de sugerencia | Usuario rechaza una sugerencia | La sugerencia queda rechazada y no se crea tarea |

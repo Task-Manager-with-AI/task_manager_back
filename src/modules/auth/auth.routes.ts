@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Router as ExpressRouter } from "express";
 import rateLimit from "express-rate-limit";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import {
@@ -16,7 +16,7 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-export const authRouter = Router();
+export const authRouter: ExpressRouter = Router();
 
 /**
  * @openapi

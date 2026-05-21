@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Router as ExpressRouter } from "express";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { membershipMiddleware } from "../../middlewares/membership.middleware";
 import {
@@ -6,7 +6,7 @@ import {
   updateKanbanLayoutController,
 } from "./kanban.controller";
 
-export const kanbanRouter = Router({ mergeParams: true });
+export const kanbanRouter: ExpressRouter = Router({ mergeParams: true });
 
 kanbanRouter.get(
   "/columns",

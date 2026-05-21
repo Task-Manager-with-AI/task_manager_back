@@ -108,7 +108,12 @@ export async function uploadMeetingAudio(
   if (!meeting) throw new AppError("Meeting not found or access denied", 404);
 
   const ext = audioStorage.inferExtensionFromMime(mimeType);
-  const audioUrl = await audioStorage.storeAudio(meetingId, audioBuffer, ext);
+  const audioUrl = await audioStorage.storeAudio(
+    meetingId,
+    audioBuffer,
+    ext,
+    mimeType
+  );
 
   return updateMeetingStatus(meetingId, { audioUrl });
 }

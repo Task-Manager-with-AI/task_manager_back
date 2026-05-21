@@ -33,12 +33,15 @@
 ```env
 # task_manager_back/.env
 AI_BACKEND_URL=http://localhost:8000
-OPENAI_API_KEY=sk-...   # o usar AI_PROVIDER=local con Ollama
 
-# task_manager_ai_back/.env
+# task_manager_ai_back/.env (elige un proveedor)
 AI_PROVIDER=openai
 OPENAI_API_KEY=sk-...
 OPENAI_LLM_MODEL=gpt-4o-mini
+# o
+AI_PROVIDER=local
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_LLM_MODEL=llama3.1:8b
 ```
 
 ---
@@ -306,7 +309,7 @@ curl http://localhost:4000/api/v1/meetings \
 
 | Síntoma | Causa probable | Solución |
 |---------|---------------|----------|
-| Badge de tipo siempre muestra "Reunión regular" | `OPENAI_API_KEY` no configurada | Configura la clave o usa `AI_PROVIDER=local` con Ollama |
+| Badge de tipo siempre muestra "Reunión regular" | Proveedor IA no configurado en el AI backend | Configura `AI_PROVIDER=openai` con `OPENAI_API_KEY` o usa `AI_PROVIDER=local` con Ollama |
 | No aparece sección "Detección" en la reunión | El tipo no se detectó como DAILY | Verifica el título del meeting o el contenido del audio |
 | `GET /meetings/:id/daily` devuelve 400 | Reunión no es tipo DAILY | Verifica que `meetingType === "DAILY"` en la BD |
 | Kanban updates aparece vacío | No se mencionaron tareas con nombre coincidente | El match es fuzzy vía LLM; usa nombres de tarea iguales o similares al mencionado en el audio |
