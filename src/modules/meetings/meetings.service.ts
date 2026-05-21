@@ -174,6 +174,10 @@ async function processMeetingPipeline(meetingId: string) {
   try {
     // ── Step 1: Transcribe audio ──────────────────────────────────────────
     const audioBuffer = await audioStorage.readAudio(meeting.audioUrl);
+    console.log(
+      `[meeting ${meetingId}] transcribing ${(audioBuffer.length / 1024 / 1024).toFixed(2)} MB...`
+    );
+    const transcribeStarted = Date.now();
     const extToMime: Record<string, string> = {
       mp3: "audio/mpeg",
       m4a: "audio/mp4",
@@ -194,6 +198,9 @@ async function processMeetingPipeline(meetingId: string) {
       audioBuffer,
       meeting.audioUrl.split("/").pop() ?? "audio.webm",
       mimeFromPath
+    );
+    console.log(
+      `[meeting ${meetingId}] transcription done in ${((Date.now() - transcribeStarted) / 1000).toFixed(1)}s (${transcription.duration_seconds.toFixed(0)}s audio)`
     );
 
     const participantNames = meeting.participants

@@ -10,6 +10,8 @@ const envSchema = z.object({
   BACKEND_URL: z.string().url().optional(),
   FRONTEND_URL: z.string().url("FRONTEND_URL must be a valid URL"),
   AI_BACKEND_URL: z.string().url().default("http://localhost:8000"),
+  /** Max wait for AI HTTP responses (ms). Transcription on CPU can take several minutes. */
+  AI_FETCH_TIMEOUT_MS: z.coerce.number().default(900_000),
   AUDIO_UPLOAD_DIR: z.string().default("./public/uploads/audio"),
 });
 
