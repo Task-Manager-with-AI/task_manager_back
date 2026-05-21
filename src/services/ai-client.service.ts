@@ -1,5 +1,6 @@
 import { env } from "../config/env";
 import { AppError } from "../shared/errors/AppError";
+import { aiFetch } from "./ai-fetch.service";
 
 const baseUrl = env.AI_BACKEND_URL.replace(/\/$/, "");
 
@@ -113,10 +114,10 @@ export async function transcribeAudio(
   form.append("audio_file", blob, fileName);
   form.append("language", language);
 
-  const res = await fetch(`${baseUrl}/api/v1/transcribe`, {
+  const res = await aiFetch(`${baseUrl}/api/v1/transcribe`, {
     method: "POST",
     body: form,
-  });
+  }, "transcription");
   return readWrapped<TranscribeResult>(res, "transcription");
 }
 
@@ -126,11 +127,11 @@ export async function generateMinutes(input: {
   participants: string[];
   language?: string;
 }): Promise<MinutesResult> {
-  const res = await fetch(`${baseUrl}/api/v1/minutes`, {
+  const res = await aiFetch(`${baseUrl}/api/v1/minutes`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ language: "es", ...input }),
-  });
+  }, "minutes generation");
   return readWrapped<MinutesResult>(res, "minutes generation");
 }
 
@@ -139,11 +140,11 @@ export async function extractSuggestions(input: {
   project_members: { id: string; name: string }[];
   language?: string;
 }): Promise<SuggestionsResult> {
-  const res = await fetch(`${baseUrl}/api/v1/suggestions`, {
+  const res = await aiFetch(`${baseUrl}/api/v1/suggestions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ language: "es", ...input }),
-  });
+  }, "task suggestions");
   return readWrapped<SuggestionsResult>(res, "task suggestions");
 }
 
@@ -153,11 +154,11 @@ export async function detectMeetingType(input: {
   participants: string[];
   language?: string;
 }): Promise<DetectTypeResult> {
-  const res = await fetch(`${baseUrl}/api/v1/detect-type`, {
+  const res = await aiFetch(`${baseUrl}/api/v1/detect-type`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ language: "es", ...input }),
-  });
+  }, "meeting type detection");
   return readWrapped<DetectTypeResult>(res, "meeting type detection");
 }
 
@@ -166,11 +167,11 @@ export async function analyzeDaily(input: {
   participants: string[];
   language?: string;
 }): Promise<AnalyzeDailyResult> {
-  const res = await fetch(`${baseUrl}/api/v1/analyze-daily`, {
+  const res = await aiFetch(`${baseUrl}/api/v1/analyze-daily`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ language: "es", ...input }),
-  });
+  }, "daily analysis");
   return readWrapped<AnalyzeDailyResult>(res, "daily analysis");
 }
 
@@ -181,11 +182,11 @@ export async function analyzeSprintPlanning(input: {
   project_members: { id: string; name: string }[];
   language?: string;
 }): Promise<AnalyzeSprintResult> {
-  const res = await fetch(`${baseUrl}/api/v1/analyze-sprint`, {
+  const res = await aiFetch(`${baseUrl}/api/v1/analyze-sprint`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ language: "es", ...input }),
-  });
+  }, "sprint planning analysis");
   return readWrapped<AnalyzeSprintResult>(res, "sprint planning analysis");
 }
 
@@ -194,10 +195,10 @@ export async function detectKanbanUpdates(input: {
   existing_tasks: ExistingTaskInput[];
   language?: string;
 }): Promise<DetectKanbanUpdatesResult> {
-  const res = await fetch(`${baseUrl}/api/v1/detect-kanban-updates`, {
+  const res = await aiFetch(`${baseUrl}/api/v1/detect-kanban-updates`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ language: "es", ...input }),
-  });
+  }, "kanban updates detection");
   return readWrapped<DetectKanbanUpdatesResult>(res, "kanban updates detection");
 }
