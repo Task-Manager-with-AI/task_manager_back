@@ -47,7 +47,8 @@ flowchart LR
     end
     subgraph Datos
         DB[(PostgreSQL)]
-        DISK[(Disco / uploads audio)]
+        S3[(AWS S3 privado / audios)]
+        DISK[(Fallback local / uploads audio)]
     end
     subgraph ProveedorIA["Proveedor IA (elige uno)"]
         OAI[OpenAI API]
@@ -56,13 +57,14 @@ flowchart LR
 
     FE --> API
     API --> DB
-    API --> DISK
+    API --> S3
+    API -. desarrollo sin S3 .-> DISK
     API -->|HTTP AI_BACKEND_URL| IA
     IA --> OAI
     IA --> LOC
 ```
 
-**Flujo tras finalizar una reunión:** el Node sube el audio, llama en secuencia a transcribe → detect-type → detect-kanban-updates → análisis/minutas/sugerencias según el tipo, y persiste en PostgreSQL.
+**Flujo tras finalizar una reunión:** el Node guarda el audio en S3 privado si esta configurado (`s3://bucket/key`) o en disco local como fallback, lee el buffer para enviarlo al servicio IA, llama en secuencia a transcribe → detect-type → detect-kanban-updates → análisis/minutas/sugerencias según el tipo, y persiste en PostgreSQL.
 
 ---
 
@@ -96,7 +98,12 @@ Reinicia la terminal para que `ffmpeg` esté en el `PATH`.
 | `JWT_SECRET` | ≥ 32 caracteres | (secreto fuerte) | (secreto fuerte, rotación periódica) |
 | `FRONTEND_URL` | CORS + cookies | `http://localhost:3000` | `https://app.tudominio.com` |
 | `AI_BACKEND_URL` | Base URL del servicio IA | `http://localhost:8000` | `http://ai-backend:8000` (Docker) o URL interna |
-| `AUDIO_UPLOAD_DIR` | Carpeta de audios de reuniones | `./public/uploads/audio` | Volumen persistente o object storage (futuro) |
+| `AUDIO_UPLOAD_DIR` | Fallback local de audios si S3 no esta configurado | `./public/uploads/audio` | Volumen temporal solo para fallback |
+| `AWS_REGION` | Region del bucket S3 | `us-east-1` | Region real del bucket |
+| `AWS_S3_BUCKET` | Bucket privado para audios/videos de reuniones | `gestionagil-331145994790-us-east-1-an` | Bucket privado de produccion |
+| `AWS_S3_AUDIO_PREFIX` | Prefijo de objetos de audio | `meetings/audio` | `meetings/audio` |
+| `AWS_ACCESS_KEY_ID` | Access key IAM para desarrollo/despliegue fuera de AWS | No commitear | Preferir rol IAM si corre en AWS |
+| `AWS_SECRET_ACCESS_KEY` | Secret key IAM | No commitear | Preferir rol IAM si corre en AWS |
 
 Plantilla: [`task_manager_back/.env.example`](../.env.example).
 
@@ -119,25 +126,11 @@ La variable clave es **`AI_PROVIDER`**: `openai` o `local`. Solo debe estar acti
 | `OLLAMA_LLM_MODEL` | `local` | Modelo ya descargado con `ollama pull` |
 | `DEFAULT_LANGUAGE` | Siempre | Por defecto `es` |
 
-### 4.3 Docker Compose (raíz del monorepo)
+### 4.3 Docker (sin Compose en el repo)
 
-El servicio `ai_backend` en [`docker-compose.yml`](../../docker-compose.yml) usa `env_file: .env` en la **raíz del proyecto**. Para Docker, copia las variables de IA desde `task_manager_ai_back/.env.example` al `.env` raíz (o unifica ambos archivos).
+> Este repositorio no incluye `docker-compose.yml`. Si deseas usar Compose, crea tu propio archivo con los servicios `backend`, `ai_backend`, `db` y `frontend`.
 
-Añade al `.env` raíz, como mínimo:
-
-```env
-# Sprint 2 — servicio IA (también leído por ai_backend en Docker)
-AI_PROVIDER=openai
-OPENAI_API_KEY=sk-...
-OPENAI_WHISPER_MODEL=whisper-1
-OPENAI_LLM_MODEL=gpt-4o-mini
-DEFAULT_LANGUAGE=es
-
-# Backend Node (si no están ya)
-AI_BACKEND_URL=http://ai_backend:8000
-```
-
-> En Compose, el backend debe apuntar al **nombre del servicio** (`http://ai_backend:8000`), no a `localhost`.
+Para desplegar en Docker por servicio, utiliza los `Dockerfile` existentes y define las variables de entorno en cada contenedor (por ejemplo, `AI_BACKEND_URL` en el backend Node y `AI_PROVIDER`/`OPENAI_API_KEY` en el backend IA).
 
 ---
 
@@ -201,15 +194,11 @@ pip install -r requirements.txt
 
 ### 6.3 Despliegue con Docker (OpenAI)
 
-1. Añade las variables de la sección 6.1 al `.env` **raíz**.
-2. En `task_manager_back/.env` (o variables del servicio `backend` en Compose): `AI_BACKEND_URL=http://ai_backend:8000`.
-3. Ejecuta:
+1. Define las variables de la sección 6.1 en el contenedor de IA.
+2. En el contenedor del backend Node, configura `AI_BACKEND_URL` apuntando al host del servicio IA.
+3. Construye y ejecuta cada servicio con su `Dockerfile`.
 
-```bash
-docker compose up --build
-```
-
-4. Comprueba: `http://localhost:8000/api/v1/health` y `http://localhost:4000/api/v1/health`.
+Comprueba: `http://localhost:8000/api/v1/health` y `http://localhost:4000/api/v1/health`.
 
 La imagen [`task_manager_ai_back/Dockerfile`](../../task_manager_ai_back/Dockerfile) instala solo `requirements.txt` (incluye `openai`). **No requiere** Ollama ni `faster-whisper`.
 
@@ -345,9 +334,11 @@ npx prisma generate
 
 2. **`AI_BACKEND_URL`** debe ser alcanzable desde el proceso Node (misma red Docker, `localhost`, o URL interna del balanceador).
 
-3. **`AUDIO_UPLOAD_DIR`** debe existir y ser escribible; en Docker monta un volumen si no quieres perder audios al reiniciar.
+3. **Storage de audios:** configura `AWS_REGION` y `AWS_S3_BUCKET` para usar S3 privado. El backend guardara `Meeting.audioUrl` como `s3://bucket/key` y leera el objeto desde S3 para enviarlo al servicio IA.
 
-4. El Node no valida `AI_PROVIDER`; solo hace HTTP al FastAPI. Los errores de configuración (sin API key, Ollama caído) aparecen como fallos del pipeline de reunión (`FAILED` / mensaje controlado).
+4. **Fallback local:** si faltan `AWS_REGION` o `AWS_S3_BUCKET`, `AUDIO_UPLOAD_DIR` debe existir y ser escribible. Este modo es para desarrollo o contingencia, no como almacenamiento principal de produccion.
+
+5. El Node no valida `AI_PROVIDER`; solo hace HTTP al FastAPI. Los errores de configuración (sin API key, Ollama caído) aparecen como fallos del pipeline de reunión (`FAILED` / mensaje controlado).
 
 ---
 
@@ -363,15 +354,9 @@ npx prisma generate
 5. Frontend
 ```
 
-### 9.2 Docker Compose (todo el monorepo)
+### 9.2 Docker (por servicio)
 
-```bash
-# Desde la raíz del repositorio
-cp .env.example .env
-# Editar .env: JWT_SECRET, FRONTEND_URL, variables IA (sección 4.3)
-
-docker compose up --build
-```
+Ejecuta cada servicio con su `Dockerfile` y configura las variables de entorno correspondientes.
 
 | Servicio | URL local |
 |----------|-----------|
@@ -447,7 +432,9 @@ curl -s http://localhost:4000/api/v1/health
 - `FRONTEND_URL` y `JWT_SECRET` del backend deben coincidir con el dominio real (HTTPS).
 - WebRTC en producción exige **HTTPS** (no solo `localhost`).
 - Rotar `OPENAI_API_KEY` si se filtra; revisar logs sin volcar transcripciones completas en cliente.
-- Backups: PostgreSQL + carpeta `AUDIO_UPLOAD_DIR` (o migración futura a object storage).
+- S3 debe permanecer privado; usar IAM con permisos minimos sobre `meetings/audio/*` y no usar credenciales root.
+- No commitear `AWS_ACCESS_KEY_ID` ni `AWS_SECRET_ACCESS_KEY`; en AWS preferir roles IAM sobre claves estaticas.
+- Backups: PostgreSQL + politicas/versionado del bucket S3. La carpeta `AUDIO_UPLOAD_DIR` solo aplica si se usa fallback local.
 
 ---
 

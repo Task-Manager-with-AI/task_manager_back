@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Router as ExpressRouter } from "express";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { membershipMiddleware } from "../../middlewares/membership.middleware";
 import { kanbanRouter } from "../kanban/kanban.routes";
@@ -12,7 +12,7 @@ import {
   getMembersController,
 } from "./projects.controller";
 
-export const projectsRouter = Router();
+export const projectsRouter: ExpressRouter = Router();
 
 /**
  * @openapi

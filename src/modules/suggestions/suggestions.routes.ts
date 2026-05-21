@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Router as ExpressRouter } from "express";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import {
   acceptSuggestionController,
@@ -7,7 +7,7 @@ import {
   updateSuggestionController,
 } from "./suggestions.controller";
 
-export const suggestionsRouter = Router();
+export const suggestionsRouter: ExpressRouter = Router();
 
 suggestionsRouter.get(
   "/minutes/:minuteId/suggestions",

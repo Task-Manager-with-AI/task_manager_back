@@ -1,5 +1,5 @@
 import "dotenv/config";
-import express from "express";
+import express, { type Express } from "express";
 import helmet from "helmet";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
@@ -16,7 +16,7 @@ import { suggestionsRouter } from "./modules/suggestions/suggestions.routes";
 import path from "path";
 import { env } from "./config/env";
 
-export const app = express();
+export const app: Express = express();
 
 app.set("trust proxy", 1);
 app.use(helmet());

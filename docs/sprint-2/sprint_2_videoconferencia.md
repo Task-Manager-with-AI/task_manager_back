@@ -29,6 +29,9 @@ Host termina la llamada
 Audio blob se sube automáticamente al backend
        │
        ▼
+Backend guarda audio en AWS S3 privado
+       │   fallback local: public/uploads/audio/
+       ▼
 Backend → AI Service (FastAPI)
    1. Whisper API  →  transcripción de texto completa
    2. GPT-4o-mini  →  minutas estructuradas (resumen + puntos clave + acuerdos)
@@ -100,7 +103,7 @@ suggestions/→ routes, controller, service, repository, schema
 
 **Nuevos servicios en** `src/services/`:
 - `ai-client.service.ts` — llama a los 3 endpoints del AI service via `fetch`
-- `audio-storage.service.ts` — guarda blobs de audio en disco (`public/uploads/audio/`)
+- `audio-storage.service.ts` — guarda blobs de audio/video en AWS S3 privado cuando esta configurado, o en disco local (`public/uploads/audio/`) como fallback de desarrollo
 
 **Servidor Socket.IO en** `src/signaling/signaling.server.ts`:
 - Se adjunta al `http.Server` en `src/server.ts` (único archivo existente modificado)
@@ -157,7 +160,14 @@ npm install -D @types/multer
 ```
 AI_BACKEND_URL=http://localhost:8000
 AUDIO_UPLOAD_DIR=./public/uploads/audio
+AWS_REGION=us-east-1
+AWS_S3_BUCKET=gestionagil-331145994790-us-east-1-an
+AWS_S3_AUDIO_PREFIX=meetings/audio
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
 ```
+
+Las variables AWS son opcionales. Si `AWS_REGION` y `AWS_S3_BUCKET` existen, el audio se guarda en S3 privado; si faltan, se usa `AUDIO_UPLOAD_DIR` como fallback local.
 
 ---
 
@@ -359,6 +369,7 @@ Redirect automático: al recibir `meeting:minutes-ready` por Socket.IO, el `room
 | `task_manager_back/prisma/schema.prisma` | +6 modelos nuevos |
 | `task_manager_back/src/server.ts` | `app.listen` → `http.createServer` + Socket.IO |
 | `task_manager_back/src/app.ts` | Mount de 3 nuevos routers |
+| `task_manager_back/src/services/audio-storage.service.ts` | Storage S3 privado para audios/videos con fallback local |
 | `task_manager_front/next.config.mjs` | Rewrite Socket.IO |
 | `task_manager_front/app/(dashboard)/projects/[projectId]/page.tsx` | +botón "Reuniones" |
 | `task_manager_ai_back/requirements.txt` | +3 dependencias |
@@ -379,4 +390,6 @@ Redirect automático: al recibir `meeting:minutes-ready` por Socket.IO, el `room
 
 4. **Upload de audio**: usa `fetch` con `FormData` directamente (no `api-client`) porque `api-client` fuerza `Content-Type: application/json`, incompatible con multipart.
 
-5. **Socket.IO en dev**: el rewrite de `next.config.mjs` proxea `/socket.io/*` al backend para que el cliente del frontend funcione en desarrollo.
+5. **Storage de audio**: `audio-storage.service.ts` sube el blob a S3 si existen `AWS_REGION` y `AWS_S3_BUCKET`; si faltan, usa `public/uploads/audio/`. La reunion guarda `audioUrl` como `s3://bucket/key` o `/uploads/audio/file`.
+
+6. **Socket.IO en dev**: el cliente de videollamada conecta con el backend Node para senalizacion y usa cookies JWT con `withCredentials`.

@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Router as ExpressRouter } from "express";
 import multer from "multer";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { membershipMiddleware } from "../../middlewares/membership.middleware";
@@ -14,7 +14,7 @@ import {
   getKanbanUpdatesController,
 } from "./meetings.controller";
 
-export const meetingsRouter = Router();
+export const meetingsRouter: ExpressRouter = Router();
 
 const upload = multer({
   storage: multer.memoryStorage(),
