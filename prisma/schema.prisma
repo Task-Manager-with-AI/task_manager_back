@@ -53,37 +53,40 @@ model Role {
 }
 
 model User {
-  id                    String               @id @default(uuid())
-  name                  String
-  email                 String               @unique
-  passwordHash          String
-  roleId                Int
-  isActive              Boolean              @default(true)
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
-  role                  Role                 @relation(fields: [roleId], references: [id])
-  projects              Project[]            @relation("ProjectCreator")
-  memberships           ProjectMember[]
-  tasksCreated          Task[]               @relation("TaskCreator")
-  tasksOwned            Task[]               @relation("TaskResponsible")
-  meetingsCreated       Meeting[]            @relation("MeetingCreator")
-  meetingParticipations MeetingParticipant[]
-  suggestedTasks        TaskSuggestion[]     @relation("SuggestedResponsible")
+  id                     String               @id @default(uuid())
+  name                   String
+  email                  String               @unique
+  passwordHash           String
+  roleId                 Int
+  isActive               Boolean              @default(true)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  role                   Role                 @relation(fields: [roleId], references: [id])
+  projects               Project[]            @relation("ProjectCreator")
+  memberships            ProjectMember[]
+  tasksCreated           Task[]               @relation("TaskCreator")
+  tasksOwned             Task[]               @relation("TaskResponsible")
+  meetingsCreated        Meeting[]            @relation("MeetingCreator")
+  meetingParticipations  MeetingParticipant[]
+  suggestedTasks         TaskSuggestion[]     @relation("SuggestedResponsible")
+  documentsCreated       Document[]           @relation("DocumentCreator")
+  documentAssetsUploaded DocumentAsset[]      @relation("DocumentAssetUploader")
 }
 
 model Project {
-  id          String          @id @default(uuid())
-  name        String
-  description String?
-  status      String          @default("ACTIVE")
-  createdById String
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  createdBy   User            @relation("ProjectCreator", fields: [createdById], references: [id])
+  id            String          @id @default(uuid())
+  name          String
+  description   String?
+  status        String          @default("ACTIVE")
+  createdById   String
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  createdBy     User            @relation("ProjectCreator", fields: [createdById], references: [id])
   members       ProjectMember[]
   tasks         Task[]
   meetings      Meeting[]
   kanbanColumns KanbanColumn[]
+  documents     Document[]
 }
 
 model KanbanColumn {
@@ -245,4 +248,37 @@ model AutoKanbanUpdate {
   meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   @@index([meetingId])
+}
+
+model Document {
+  id           String          @id @default(uuid())
+  projectId    String
+  createdById  String
+  title        String
+  contentState Bytes?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  deletedAt    DateTime?
+  project      Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy    User            @relation("DocumentCreator", fields: [createdById], references: [id])
+  assets       DocumentAsset[]
+
+  @@index([projectId])
+  @@index([createdById])
+}
+
+model DocumentAsset {
+  id           String   @id @default(uuid())
+  documentId   String
+  s3Key        String
+  fileName     String
+  mimeType     String
+  size         Int
+  uploadedById String
+  createdAt    DateTime @default(now())
+  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploadedBy   User     @relation("DocumentAssetUploader", fields: [uploadedById], references: [id])
+
+  @@index([documentId])
+  @@index([uploadedById])
 }
