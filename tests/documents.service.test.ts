@@ -9,9 +9,11 @@ const prismaMock = vi.hoisted(() => ({
 }));
 
 const repositoryMock = vi.hoisted(() => ({
+  createAuditLog: vi.fn(),
   createDocument: vi.fn(),
   createDocumentAsset: vi.fn(),
   deleteDocumentAsset: vi.fn(),
+  findDocumentAccessForUser: vi.fn(),
   findDocumentAsset: vi.fn(),
   findDocumentForUser: vi.fn(),
   listDocumentAssets: vi.fn(),
@@ -48,6 +50,12 @@ import {
 describe("documents.service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    repositoryMock.findDocumentAccessForUser.mockResolvedValue({
+      id: "doc-1",
+      projectId: "project-1",
+      createdById: "user-1",
+      permissions: [{ role: "EDITOR" }],
+    });
   });
 
   it("creates a document only when the user is an active project member", async () => {
@@ -80,6 +88,7 @@ describe("documents.service", () => {
     repositoryMock.findDocumentForUser.mockResolvedValueOnce({ id: "doc-1" });
     await expect(getDocument("doc-1", "user-1")).resolves.toEqual({
       id: "doc-1",
+      accessRole: "EDITOR",
     });
 
     repositoryMock.findDocumentForUser.mockResolvedValueOnce(null);
@@ -89,7 +98,6 @@ describe("documents.service", () => {
   });
 
   it("renames and soft deletes only after access validation", async () => {
-    repositoryMock.findDocumentForUser.mockResolvedValue({ id: "doc-1" });
     repositoryMock.updateDocumentTitle.mockResolvedValue({
       id: "doc-1",
       title: "Nuevo",
@@ -105,7 +113,6 @@ describe("documents.service", () => {
   });
 
   it("uploads an asset to S3 and stores public metadata without exposing s3Key", async () => {
-    repositoryMock.findDocumentForUser.mockResolvedValue({ id: "doc-1" });
     storageMock.storeDocumentAsset.mockResolvedValue(
       "documents/assets/doc-1/file.txt"
     );
@@ -143,7 +150,6 @@ describe("documents.service", () => {
     };
     const stream = Readable.from(["hola"]);
 
-    repositoryMock.findDocumentForUser.mockResolvedValue({ id: "doc-1" });
     repositoryMock.listDocumentAssets.mockResolvedValue([{ id: "asset-1" }]);
     repositoryMock.findDocumentAsset.mockResolvedValue(asset);
     repositoryMock.deleteDocumentAsset.mockResolvedValue(asset);

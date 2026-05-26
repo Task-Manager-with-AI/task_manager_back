@@ -1,17 +1,27 @@
+﻿import { DocumentPermissionRole } from "@prisma/client";
 import { Server } from "@hocuspocus/server";
 import { jwtVerify } from "jose";
 import { parse as parseCookie } from "cookie";
 import * as Y from "yjs";
 import { env } from "../config/env";
 import { prisma } from "../prisma/client";
-import { findDocumentStateForUser, updateDocumentContentState } from "../modules/documents/documents.repository";
+import { registerCollaborationServer } from "./collaboration.runtime";
+import {
+  createDocumentVersion,
+  findDocumentStateForUser,
+  pruneDocumentVersionsOlderThan,
+  updateDocumentContentState,
+} from "../modules/documents/documents.repository";
+import { getDocumentAccessRole } from "../modules/documents/documents.service";
 
 type CollaborationContext = {
   userId?: string;
   documentId?: string;
+  role?: DocumentPermissionRole;
 };
 
 const secret = new TextEncoder().encode(env.JWT_SECRET);
+const lastSnapshotAt = new Map<string, number>();
 
 export async function setupCollaboration() {
   const port = env.COLLABORATION_PORT ?? env.BACKEND_PORT + 1;
@@ -25,12 +35,13 @@ export async function setupCollaboration() {
       const documentId = parseDocumentId(documentName);
       const userId = await authenticateFromCookies(requestHeaders);
       const document = await findDocumentStateForUser(documentId, userId);
+      const role = await getDocumentAccessRole(documentId, userId);
 
       if (!document) {
         throw new Error("Document not found or access denied");
       }
 
-      return { userId, documentId };
+      return { userId, documentId, role };
     },
     async onLoadDocument({ context, document }) {
       if (!context.documentId || !context.userId) {
@@ -52,6 +63,16 @@ export async function setupCollaboration() {
 
       return document;
     },
+    async onChange({ context, transactionOrigin }) {
+      const source = (transactionOrigin as { source?: string } | undefined)?.source;
+      if (source && source !== "connection") {
+        return;
+      }
+
+      if (!context.role || context.role !== DocumentPermissionRole.EDITOR) {
+        throw new Error("Editing is not allowed for your document role");
+      }
+    },
     async onStoreDocument({ documentName, document }) {
       const documentId = parseDocumentId(documentName);
       const exists = await prisma.document.findFirst({
@@ -66,14 +87,33 @@ export async function setupCollaboration() {
 
       if (!exists) return;
 
-      await updateDocumentContentState(
-        documentId,
-        Buffer.from(Y.encodeStateAsUpdate(document))
-      );
+      const encodedState = Buffer.from(Y.encodeStateAsUpdate(document));
+
+      await updateDocumentContentState(documentId, encodedState);
+
+      const now = Date.now();
+      const last = lastSnapshotAt.get(documentId) ?? 0;
+
+      if (now - last >= env.DOCS_SNAPSHOT_INTERVAL_MS) {
+        await createDocumentVersion({
+          documentId,
+          source: "realtime_snapshot",
+          contentState: encodedState,
+          plainText: null,
+        });
+
+        await pruneDocumentVersionsOlderThan(
+          documentId,
+          new Date(now - env.DOCS_VERSION_RETENTION_DAYS * 24 * 60 * 60 * 1000)
+        );
+
+        lastSnapshotAt.set(documentId, now);
+      }
     },
   });
 
   await server.listen(port);
+  registerCollaborationServer(server);
   console.log(`Collaboration server listening on ws://localhost:${port}/collaboration`);
 
   return server;
@@ -122,3 +162,4 @@ function getCookieHeader(
 
   return raw ?? "";
 }
+

@@ -19,6 +19,13 @@ const envSchema = z.object({
   AWS_S3_AUDIO_PREFIX: z.string().default("meetings/audio"),
   AWS_ACCESS_KEY_ID: z.string().optional(),
   AWS_SECRET_ACCESS_KEY: z.string().optional(),
+  DOCUMENT_ASSET_STORAGE_MODE: z.enum(["auto", "s3", "local"]).default("auto"),
+  DOCUMENT_ASSET_LOCAL_DIR: z.string().default("./public/uploads/documents"),
+  DOCX_CONVERTER_URL: z.string().url().optional(),
+  DOCX_CONVERTER_CALLBACK_SECRET: z.string().default("local-docx-callback-secret"),
+  DOCUMENT_ASSET_MAX_FILE_SIZE_MB: z.coerce.number().int().min(1).default(200),
+  DOCS_VERSION_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  DOCS_SNAPSHOT_INTERVAL_MS: z.coerce.number().int().min(30_000).default(300_000),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -46,6 +46,38 @@ enum SuggestionStatus {
   EDITED
 }
 
+enum DocumentPermissionRole {
+  VIEWER
+  COMMENTER
+  EDITOR
+}
+
+enum DocumentSuggestionType {
+  INSERT
+  DELETE
+  FORMAT
+  REPLACE
+}
+
+enum DocumentSuggestionStatus {
+  OPEN
+  ACCEPTED
+  REJECTED
+}
+
+enum DocumentConversionJobType {
+  IMPORT_DOCX
+  EXPORT_DOCX
+}
+
+enum DocumentConversionJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
 model Role {
   id    Int      @id @default(autoincrement())
   name  RoleName @unique
@@ -71,6 +103,15 @@ model User {
   suggestedTasks         TaskSuggestion[]     @relation("SuggestedResponsible")
   documentsCreated       Document[]           @relation("DocumentCreator")
   documentAssetsUploaded DocumentAsset[]      @relation("DocumentAssetUploader")
+  documentPermissions    DocumentPermission[] @relation("DocumentPermissionUser")
+  createdCommentThreads  CommentThread[]      @relation("CommentThreadCreator")
+  resolvedCommentThreads CommentThread[]      @relation("CommentThreadResolver")
+  documentComments       Comment[]            @relation("CommentAuthor")
+  createdDocumentSuggestions  DocumentSuggestion[] @relation("DocumentSuggestionCreator")
+  resolvedDocumentSuggestions DocumentSuggestion[] @relation("DocumentSuggestionResolver")
+  createdDocumentVersions     DocumentVersion[]    @relation("DocumentVersionCreator")
+  documentAuditLogs           DocumentAuditLog[]   @relation("DocumentAuditActor")
+  documentConversionJobs      DocumentConversionJob[] @relation("DocumentConversionCreator")
 }
 
 model Project {
@@ -262,6 +303,12 @@ model Document {
   project      Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy    User            @relation("DocumentCreator", fields: [createdById], references: [id])
   assets       DocumentAsset[]
+  permissions  DocumentPermission[]
+  commentThreads CommentThread[]
+  suggestions  DocumentSuggestion[]
+  versions     DocumentVersion[]
+  auditLogs    DocumentAuditLog[]
+  conversionJobs DocumentConversionJob[]
 
   @@index([projectId])
   @@index([createdById])
@@ -278,7 +325,139 @@ model DocumentAsset {
   createdAt    DateTime @default(now())
   document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   uploadedBy   User     @relation("DocumentAssetUploader", fields: [uploadedById], references: [id])
+  conversionInputJobs DocumentConversionJob[] @relation("ConversionInputAsset")
+  conversionOutputJobs DocumentConversionJob[] @relation("ConversionOutputAsset")
 
   @@index([documentId])
   @@index([uploadedById])
+}
+
+model DocumentPermission {
+  id         String                 @id @default(uuid())
+  documentId String
+  userId     String
+  role       DocumentPermissionRole @default(EDITOR)
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+  document   Document               @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User                   @relation("DocumentPermissionUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+  @@index([documentId])
+  @@index([userId])
+}
+
+model CommentThread {
+  id           String   @id @default(uuid())
+  documentId   String
+  createdById  String
+  anchorFrom   Int?
+  anchorTo     Int?
+  quoteText    String?
+  isResolved   Boolean  @default(false)
+  resolvedAt   DateTime?
+  resolvedById String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy    User     @relation("CommentThreadCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  resolvedBy   User?    @relation("CommentThreadResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  comments     Comment[]
+
+  @@index([documentId, createdAt])
+  @@index([documentId, isResolved])
+}
+
+model Comment {
+  id         String    @id @default(uuid())
+  threadId   String
+  authorId   String
+  body       String
+  mentions   String[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+  thread     CommentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author     User      @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([threadId, createdAt])
+}
+
+model DocumentSuggestion {
+  id           String                   @id @default(uuid())
+  documentId   String
+  createdById  String
+  resolvedById String?
+  type         DocumentSuggestionType
+  status       DocumentSuggestionStatus @default(OPEN)
+  anchorFrom   Int?
+  anchorTo     Int?
+  note         String?
+  payload      Json?
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  resolvedAt   DateTime?
+  document     Document                 @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy    User                     @relation("DocumentSuggestionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  resolvedBy   User?                    @relation("DocumentSuggestionResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([documentId, status, createdAt])
+}
+
+model DocumentVersion {
+  id           String   @id @default(uuid())
+  documentId   String
+  createdById  String?
+  source       String   @default("snapshot")
+  contentState Bytes?
+  plainText    String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy    User?    @relation("DocumentVersionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  exportJobs   DocumentConversionJob[] @relation("JobSourceVersion")
+  importJobs   DocumentConversionJob[] @relation("JobResultVersion")
+
+  @@index([documentId, createdAt])
+}
+
+model DocumentAuditLog {
+  id         String   @id @default(uuid())
+  documentId String
+  actorId    String?
+  eventType  String
+  details    Json?
+  createdAt  DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  actor      User?    @relation("DocumentAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([documentId, createdAt])
+}
+
+model DocumentConversionJob {
+  id              String                     @id @default(uuid())
+  documentId      String
+  createdById     String
+  type            DocumentConversionJobType
+  status          DocumentConversionJobStatus @default(QUEUED)
+  inputAssetId    String?
+  outputAssetId   String?
+  sourceVersionId String?
+  resultVersionId String?
+  requestedFileName String?
+  providerJobId   String?
+  errorMessage    String?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+  document        Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy       User                        @relation("DocumentConversionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  inputAsset      DocumentAsset?              @relation("ConversionInputAsset", fields: [inputAssetId], references: [id], onDelete: SetNull)
+  outputAsset     DocumentAsset?              @relation("ConversionOutputAsset", fields: [outputAssetId], references: [id], onDelete: SetNull)
+  sourceVersion   DocumentVersion?            @relation("JobSourceVersion", fields: [sourceVersionId], references: [id], onDelete: SetNull)
+  resultVersion   DocumentVersion?            @relation("JobResultVersion", fields: [resultVersionId], references: [id], onDelete: SetNull)
+
+  @@index([documentId, createdAt])
+  @@index([status, type])
 }
