@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Router as ExpressRouter } from "express";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { membershipMiddleware } from "../../middlewares/membership.middleware";
 import {
@@ -10,7 +10,7 @@ import {
   deleteTaskController,
 } from "./tasks.controller";
 
-export const tasksRouter = Router();
+export const tasksRouter: ExpressRouter = Router();
 
 /**
  * @openapi

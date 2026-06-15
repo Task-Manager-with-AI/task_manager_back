@@ -1,11 +1,11 @@
-import { Router } from "express";
+import { Router, type Router as ExpressRouter } from "express";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import {
   getMinuteByMeetingController,
   getMinuteController,
 } from "./minutes.controller";
 
-export const minutesRouter = Router();
+export const minutesRouter: ExpressRouter = Router();
 
 minutesRouter.get(
   "/meetings/:meetingId/minutes",

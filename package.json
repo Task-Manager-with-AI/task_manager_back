@@ -12,7 +12,14 @@
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "argon2"
+    ]
+  },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1051.0",
+    "@hocuspocus/server": "^4.1.0",
     "@prisma/client": "^5.22.0",
     "argon2": "^0.31.2",
     "cookie": "^0.6.0",
@@ -30,6 +37,7 @@
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "undici": "^6.25.0",
+    "yjs": "^13.6.30",
     "zod": "^3.25.76"
   },
   "devDependencies": {

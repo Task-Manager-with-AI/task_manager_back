@@ -111,7 +111,12 @@ export async function uploadMeetingAudio(
   }
 
   const ext = audioStorage.inferExtensionFromMime(mimeType);
-  const audioUrl = await audioStorage.storeAudio(meetingId, audioBuffer, ext);
+  const audioUrl = await audioStorage.storeAudio(
+    meetingId,
+    audioBuffer,
+    ext,
+    mimeType
+  );
 
   return updateMeetingStatus(meetingId, { audioUrl });
 }

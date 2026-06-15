@@ -13,6 +13,11 @@ const envSchema = z.object({
   /** Max wait for AI HTTP responses (ms). Transcription on CPU can take several minutes. */
   AI_FETCH_TIMEOUT_MS: z.coerce.number().default(900_000),
   AUDIO_UPLOAD_DIR: z.string().default("./public/uploads/audio"),
+  AWS_REGION: z.string().optional(),
+  AWS_S3_BUCKET: z.string().optional(),
+  AWS_S3_AUDIO_PREFIX: z.string().default("meetings/audio"),
+  AWS_ACCESS_KEY_ID: z.string().optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

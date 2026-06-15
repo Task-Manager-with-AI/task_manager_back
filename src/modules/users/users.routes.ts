@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Router as ExpressRouter } from "express";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import {
   getMeController,
@@ -6,7 +6,7 @@ import {
   listUsersController,
 } from "./users.controller";
 
-export const usersRouter = Router();
+export const usersRouter: ExpressRouter = Router();
 
 /**
  * @openapi
