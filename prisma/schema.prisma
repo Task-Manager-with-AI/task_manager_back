@@ -52,6 +52,18 @@ enum SuggestionStatus {
   EDITED
 }
 
+enum ChatType {
+  PROJECT
+  DIRECT
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  SYSTEM
+}
+
 enum DocumentPermissionRole {
   VIEWER
   COMMENTER
@@ -91,32 +103,35 @@ model Role {
 }
 
 model User {
-  id                     String               @id @default(uuid())
-  name                   String
-  email                  String               @unique
-  passwordHash           String
-  roleId                 Int
-  isActive               Boolean              @default(true)
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
-  role                   Role                 @relation(fields: [roleId], references: [id])
-  projects               Project[]            @relation("ProjectCreator")
-  memberships            ProjectMember[]
-  tasksCreated           Task[]               @relation("TaskCreator")
-  tasksOwned             Task[]               @relation("TaskResponsible")
-  meetingsCreated        Meeting[]            @relation("MeetingCreator")
-  meetingParticipations  MeetingParticipant[]
-  suggestedTasks         TaskSuggestion[]     @relation("SuggestedResponsible")
-  documentsCreated       Document[]           @relation("DocumentCreator")
-  documentAssetsUploaded DocumentAsset[]      @relation("DocumentAssetUploader")
-  documentPermissions    DocumentPermission[] @relation("DocumentPermissionUser")
-  createdCommentThreads  CommentThread[]      @relation("CommentThreadCreator")
-  resolvedCommentThreads CommentThread[]      @relation("CommentThreadResolver")
-  documentComments       Comment[]            @relation("CommentAuthor")
-  createdDocumentSuggestions  DocumentSuggestion[] @relation("DocumentSuggestionCreator")
-  resolvedDocumentSuggestions DocumentSuggestion[] @relation("DocumentSuggestionResolver")
-  createdDocumentVersions     DocumentVersion[]    @relation("DocumentVersionCreator")
-  documentAuditLogs           DocumentAuditLog[]   @relation("DocumentAuditActor")
+  id                          String                  @id @default(uuid())
+  name                        String
+  email                       String                  @unique
+  passwordHash                String
+  roleId                      Int
+  isActive                    Boolean                 @default(true)
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @updatedAt
+  role                        Role                    @relation(fields: [roleId], references: [id])
+  projects                    Project[]               @relation("ProjectCreator")
+  memberships                 ProjectMember[]
+  tasksCreated                Task[]                  @relation("TaskCreator")
+  tasksOwned                  Task[]                  @relation("TaskResponsible")
+  meetingsCreated             Meeting[]               @relation("MeetingCreator")
+  meetingParticipations       MeetingParticipant[]
+  suggestedTasks              TaskSuggestion[]        @relation("SuggestedResponsible")
+  chats                       ChatParticipant[]
+  messagesSent                Message[]               @relation("MessageSender")
+  messageReactions            MessageReaction[]
+  documentsCreated            Document[]              @relation("DocumentCreator")
+  documentAssetsUploaded      DocumentAsset[]         @relation("DocumentAssetUploader")
+  documentPermissions         DocumentPermission[]    @relation("DocumentPermissionUser")
+  createdCommentThreads       CommentThread[]         @relation("CommentThreadCreator")
+  resolvedCommentThreads      CommentThread[]         @relation("CommentThreadResolver")
+  documentComments            Comment[]               @relation("CommentAuthor")
+  createdDocumentSuggestions  DocumentSuggestion[]    @relation("DocumentSuggestionCreator")
+  resolvedDocumentSuggestions DocumentSuggestion[]    @relation("DocumentSuggestionResolver")
+  createdDocumentVersions     DocumentVersion[]       @relation("DocumentVersionCreator")
+  documentAuditLogs           DocumentAuditLog[]      @relation("DocumentAuditActor")
   documentConversionJobs      DocumentConversionJob[] @relation("DocumentConversionCreator")
 }
 
@@ -134,6 +149,7 @@ model Project {
   meetings      Meeting[]
   kanbanColumns KanbanColumn[]
   sprints       Sprint[]
+  chat          Chat?
   documents     Document[]
 }
 
@@ -203,6 +219,7 @@ model Task {
   createdBy      User            @relation("TaskCreator", fields: [createdById], references: [id])
   responsible    User?           @relation("TaskResponsible", fields: [responsibleId], references: [id])
   taskSuggestion TaskSuggestion?
+  chatLink       ChatTaskLink?
 
   @@index([columnId])
   @@index([sprintId])
@@ -320,23 +337,92 @@ model AutoKanbanUpdate {
   @@index([meetingId])
 }
 
+model Chat {
+  id           String            @id @default(uuid())
+  type         ChatType
+  projectId    String?           @unique
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  project      Project?          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  participants ChatParticipant[]
+  messages     Message[]
+
+  @@index([type])
+}
+
+model ChatParticipant {
+  id         String    @id @default(uuid())
+  chatId     String
+  userId     String
+  joinedAt   DateTime  @default(now())
+  lastReadAt DateTime?
+  isActive   Boolean   @default(true)
+  chat       Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id])
+
+  @@unique([chatId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String            @id @default(uuid())
+  chatId         String
+  senderId       String?
+  type           MessageType       @default(TEXT)
+  content        String
+  attachmentUrl  String?
+  attachmentMime String?
+  replyToId      String?
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime          @default(now())
+  chat           Chat              @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender         User?             @relation("MessageSender", fields: [senderId], references: [id])
+  replyTo        Message?          @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies        Message[]         @relation("MessageReplies")
+  reactions      MessageReaction[]
+  taskLink       ChatTaskLink?
+
+  @@index([chatId, createdAt])
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId, emoji])
+}
+
+model ChatTaskLink {
+  id        String  @id @default(uuid())
+  messageId String  @unique
+  taskId    String  @unique
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  task      Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
 model Document {
-  id           String          @id @default(uuid())
-  projectId    String
-  createdById  String
-  title        String
-  contentState Bytes?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  deletedAt    DateTime?
-  project      Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy    User            @relation("DocumentCreator", fields: [createdById], references: [id])
-  assets       DocumentAsset[]
-  permissions  DocumentPermission[]
+  id             String                  @id @default(uuid())
+  projectId      String
+  createdById    String
+  title          String
+  contentState   Bytes?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  deletedAt      DateTime?
+  project        Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy      User                    @relation("DocumentCreator", fields: [createdById], references: [id])
+  assets         DocumentAsset[]
+  permissions    DocumentPermission[]
   commentThreads CommentThread[]
-  suggestions  DocumentSuggestion[]
-  versions     DocumentVersion[]
-  auditLogs    DocumentAuditLog[]
+  suggestions    DocumentSuggestion[]
+  versions       DocumentVersion[]
+  auditLogs      DocumentAuditLog[]
   conversionJobs DocumentConversionJob[]
 
   @@index([projectId])
@@ -344,17 +430,17 @@ model Document {
 }
 
 model DocumentAsset {
-  id           String   @id @default(uuid())
-  documentId   String
-  s3Key        String
-  fileName     String
-  mimeType     String
-  size         Int
-  uploadedById String
-  createdAt    DateTime @default(now())
-  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  uploadedBy   User     @relation("DocumentAssetUploader", fields: [uploadedById], references: [id])
-  conversionInputJobs DocumentConversionJob[] @relation("ConversionInputAsset")
+  id                   String                  @id @default(uuid())
+  documentId           String
+  s3Key                String
+  fileName             String
+  mimeType             String
+  size                 Int
+  uploadedById         String
+  createdAt            DateTime                @default(now())
+  document             Document                @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploadedBy           User                    @relation("DocumentAssetUploader", fields: [uploadedById], references: [id])
+  conversionInputJobs  DocumentConversionJob[] @relation("ConversionInputAsset")
   conversionOutputJobs DocumentConversionJob[] @relation("ConversionOutputAsset")
 
   @@index([documentId])
@@ -377,20 +463,20 @@ model DocumentPermission {
 }
 
 model CommentThread {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   documentId   String
   createdById  String
   anchorFrom   Int?
   anchorTo     Int?
   quoteText    String?
-  isResolved   Boolean  @default(false)
+  isResolved   Boolean   @default(false)
   resolvedAt   DateTime?
   resolvedById String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  createdBy    User     @relation("CommentThreadCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  resolvedBy   User?    @relation("CommentThreadResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  document     Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy    User      @relation("CommentThreadCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  resolvedBy   User?     @relation("CommentThreadResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
   comments     Comment[]
 
   @@index([documentId, createdAt])
@@ -398,16 +484,16 @@ model CommentThread {
 }
 
 model Comment {
-  id         String    @id @default(uuid())
-  threadId   String
-  authorId   String
-  body       String
-  mentions   String[]
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
-  thread     CommentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  author     User      @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  id        String        @id @default(uuid())
+  threadId  String
+  authorId  String
+  body      String
+  mentions  String[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  deletedAt DateTime?
+  thread    CommentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author    User          @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
 
   @@index([threadId, createdAt])
 }
@@ -434,16 +520,16 @@ model DocumentSuggestion {
 }
 
 model DocumentVersion {
-  id           String   @id @default(uuid())
+  id           String                  @id @default(uuid())
   documentId   String
   createdById  String?
-  source       String   @default("snapshot")
+  source       String                  @default("snapshot")
   contentState Bytes?
   plainText    String?
   metadata     Json?
-  createdAt    DateTime @default(now())
-  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  createdBy    User?    @relation("DocumentVersionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime                @default(now())
+  document     Document                @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy    User?                   @relation("DocumentVersionCreator", fields: [createdById], references: [id], onDelete: SetNull)
   exportJobs   DocumentConversionJob[] @relation("JobSourceVersion")
   importJobs   DocumentConversionJob[] @relation("JobResultVersion")
 
@@ -464,28 +550,28 @@ model DocumentAuditLog {
 }
 
 model DocumentConversionJob {
-  id              String                     @id @default(uuid())
-  documentId      String
-  createdById     String
-  type            DocumentConversionJobType
-  status          DocumentConversionJobStatus @default(QUEUED)
-  inputAssetId    String?
-  outputAssetId   String?
-  sourceVersionId String?
-  resultVersionId String?
+  id                String                      @id @default(uuid())
+  documentId        String
+  createdById       String
+  type              DocumentConversionJobType
+  status            DocumentConversionJobStatus @default(QUEUED)
+  inputAssetId      String?
+  outputAssetId     String?
+  sourceVersionId   String?
+  resultVersionId   String?
   requestedFileName String?
-  providerJobId   String?
-  errorMessage    String?
-  startedAt       DateTime?
-  finishedAt      DateTime?
-  createdAt       DateTime                    @default(now())
-  updatedAt       DateTime                    @updatedAt
-  document        Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  createdBy       User                        @relation("DocumentConversionCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  inputAsset      DocumentAsset?              @relation("ConversionInputAsset", fields: [inputAssetId], references: [id], onDelete: SetNull)
-  outputAsset     DocumentAsset?              @relation("ConversionOutputAsset", fields: [outputAssetId], references: [id], onDelete: SetNull)
-  sourceVersion   DocumentVersion?            @relation("JobSourceVersion", fields: [sourceVersionId], references: [id], onDelete: SetNull)
-  resultVersion   DocumentVersion?            @relation("JobResultVersion", fields: [resultVersionId], references: [id], onDelete: SetNull)
+  providerJobId     String?
+  errorMessage      String?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+  document          Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy         User                        @relation("DocumentConversionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  inputAsset        DocumentAsset?              @relation("ConversionInputAsset", fields: [inputAssetId], references: [id], onDelete: SetNull)
+  outputAsset       DocumentAsset?              @relation("ConversionOutputAsset", fields: [outputAssetId], references: [id], onDelete: SetNull)
+  sourceVersion     DocumentVersion?            @relation("JobSourceVersion", fields: [sourceVersionId], references: [id], onDelete: SetNull)
+  resultVersion     DocumentVersion?            @relation("JobResultVersion", fields: [resultVersionId], references: [id], onDelete: SetNull)
 
   @@index([documentId, createdAt])
   @@index([status, type])

@@ -190,6 +190,27 @@ export async function analyzeSprintPlanning(input: {
   return readWrapped<AnalyzeSprintResult>(res, "sprint planning analysis");
 }
 
+export interface ChatSummaryResult {
+  summary: string[];
+}
+
+export async function summarizeChat(
+  transcript: string,
+  language = "es"
+): Promise<string[]> {
+  const res = await aiFetch(
+    `${baseUrl}/api/v1/chat-summary`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transcript, language }),
+    },
+    "chat summary"
+  );
+  const data = await readWrapped<ChatSummaryResult>(res, "chat summary");
+  return data.summary;
+}
+
 export async function detectKanbanUpdates(input: {
   transcript: string;
   existing_tasks: ExistingTaskInput[];

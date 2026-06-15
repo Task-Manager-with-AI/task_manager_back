@@ -1,6 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../prisma/client";
 import { seedDefaultKanbanColumns } from "../../shared/kanban/defaults";
+import {
+  ensureProjectChat,
+  upsertParticipant,
+} from "../chats/chats.repository";
 
 export async function findProjectsByUser(userId: string) {
   return prisma.project.findMany({
@@ -37,6 +41,9 @@ export async function createProject(data: {
       data: { userId: data.createdById, projectId: project.id, memberRole: "ADMIN" },
     });
     await seedDefaultKanbanColumns(tx, project.id);
+    // Auto-create the project group chat with the creator as participant.
+    const chatId = await ensureProjectChat(tx, project.id);
+    await upsertParticipant(tx, chatId, data.createdById);
     return project;
   });
 }
@@ -57,9 +64,15 @@ export async function addMember(data: {
   userId: string;
   memberRole: string;
 }) {
-  return prisma.projectMember.create({
-    data,
-    include: { user: { select: { id: true, name: true, email: true } } },
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const member = await tx.projectMember.create({
+      data,
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+    // Add (or reactivate) the new member in the project group chat.
+    const chatId = await ensureProjectChat(tx, data.projectId);
+    await upsertParticipant(tx, chatId, data.userId);
+    return member;
   });
 }
 
