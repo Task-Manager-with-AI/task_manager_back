@@ -13,6 +13,7 @@ import { tasksRouter } from "./modules/tasks/tasks.routes";
 import { meetingsRouter } from "./modules/meetings/meetings.routes";
 import { minutesRouter } from "./modules/minutes/minutes.routes";
 import { suggestionsRouter } from "./modules/suggestions/suggestions.routes";
+import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
 import path from "path";
 import { env } from "./config/env";
 
@@ -38,6 +39,7 @@ app.use("/api/v1", tasksRouter);
 app.use("/api/v1", meetingsRouter);
 app.use("/api/v1", minutesRouter);
 app.use("/api/v1", suggestionsRouter);
+app.use("/api/v1/dashboard", dashboardRouter);
 
 // Static audio uploads (only for development; behind auth in real prod)
 app.use(

@@ -1,4 +1,5 @@
 import { PrismaClient, RoleName } from "@prisma/client";
+import { seedDashboardDemo } from "./seeds/dashboard-demo.seed";
 
 const prisma = new PrismaClient();
 
@@ -14,6 +15,8 @@ async function main() {
   }
 
   console.log("Seed complete: 3 roles created.");
+
+  await seedDashboardDemo(prisma);
 }
 
 main()

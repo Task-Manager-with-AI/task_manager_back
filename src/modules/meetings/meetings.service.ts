@@ -106,6 +106,9 @@ export async function uploadMeetingAudio(
 ) {
   const meeting = await findMeetingWithMembership(meetingId, userId);
   if (!meeting) throw new AppError("Meeting not found or access denied", 404);
+  if (meeting.createdById !== userId) {
+    throw new AppError("Only the meeting host can upload meeting audio", 403);
+  }
 
   const ext = audioStorage.inferExtensionFromMime(mimeType);
   const audioUrl = await audioStorage.storeAudio(meetingId, audioBuffer, ext);
@@ -116,6 +119,9 @@ export async function uploadMeetingAudio(
 export async function endMeetingAndProcess(meetingId: string, userId: string) {
   const meeting = await findMeetingWithMembership(meetingId, userId);
   if (!meeting) throw new AppError("Meeting not found or access denied", 404);
+  if (meeting.createdById !== userId) {
+    throw new AppError("Only the meeting host can end the meeting", 403);
+  }
 
   const updated = await updateMeetingStatus(meetingId, {
     status: "ENDED",

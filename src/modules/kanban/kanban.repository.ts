@@ -13,3 +13,12 @@ export async function findColumnById(columnId: string, projectId: string) {
     where: { id: columnId, projectId },
   });
 }
+
+export async function findDoneColumnId(projectId: string) {
+  const column = await prisma.kanbanColumn.findFirst({
+    where: { projectId },
+    orderBy: { position: "desc" },
+    select: { id: true },
+  });
+  return column?.id ?? null;
+}

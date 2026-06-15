@@ -39,6 +39,12 @@ enum SprintHealth {
   RED
 }
 
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+
 enum SuggestionStatus {
   PENDING
   ACCEPTED
@@ -84,6 +90,7 @@ model Project {
   tasks         Task[]
   meetings      Meeting[]
   kanbanColumns KanbanColumn[]
+  sprints       Sprint[]
 }
 
 model KanbanColumn {
@@ -114,6 +121,23 @@ model ProjectMember {
   @@unique([userId, projectId])
 }
 
+model Sprint {
+  id        String       @id @default(uuid())
+  projectId String
+  name      String
+  goal      String?
+  startDate DateTime
+  endDate   DateTime
+  status    SprintStatus @default(PLANNED)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@index([projectId])
+  @@index([projectId, status])
+}
+
 model Task {
   id             String          @id @default(uuid())
   title          String
@@ -122,17 +146,22 @@ model Task {
   priority       TaskPriority    @default(MEDIUM)
   columnId       String
   projectId      String
+  sprintId       String?
+  storyPoints    Int             @default(1)
+  completedAt    DateTime?
   createdById    String
   responsibleId  String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   project        Project         @relation(fields: [projectId], references: [id])
   column         KanbanColumn    @relation(fields: [columnId], references: [id])
+  sprint         Sprint?         @relation(fields: [sprintId], references: [id])
   createdBy      User            @relation("TaskCreator", fields: [createdById], references: [id])
   responsible    User?           @relation("TaskResponsible", fields: [responsibleId], references: [id])
   taskSuggestion TaskSuggestion?
 
   @@index([columnId])
+  @@index([sprintId])
 }
 
 model Meeting {

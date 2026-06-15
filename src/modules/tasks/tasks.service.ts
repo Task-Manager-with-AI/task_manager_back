@@ -9,7 +9,7 @@ import {
   updateTaskColumn,
   deleteTask,
 } from "./tasks.repository";
-import { findColumnById } from "../kanban/kanban.repository";
+import { findColumnById, findDoneColumnId } from "../kanban/kanban.repository";
 import type { CreateTaskDto, UpdateTaskDto, UpdateColumnDto } from "./tasks.schema";
 import { TaskPriority } from "@prisma/client";
 
@@ -101,7 +101,18 @@ export async function changeTaskColumn(
   const column = await findColumnById(dto.columnId, task.projectId);
   if (!column) throw new AppError("Column not found in this project", 400);
 
-  return updateTaskColumn(taskId, dto.columnId);
+  const doneColumnId = await findDoneColumnId(task.projectId);
+  const isMovingToDone = doneColumnId === dto.columnId;
+  const isLeavingDone = doneColumnId === task.columnId && !isMovingToDone;
+
+  let completedAt: Date | null | undefined;
+  if (isMovingToDone) {
+    completedAt = new Date();
+  } else if (isLeavingDone) {
+    completedAt = null;
+  }
+
+  return updateTaskColumn(taskId, dto.columnId, completedAt);
 }
 
 export async function removeTask(taskId: string, userId: string) {
