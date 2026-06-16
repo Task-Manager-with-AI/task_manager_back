@@ -16,6 +16,8 @@ import { suggestionsRouter } from "./modules/suggestions/suggestions.routes";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
 import { chatsRouter } from "./modules/chats/chats.routes";
 import { documentsRouter } from "./modules/documents/documents.routes";
+import { copilotRouter } from "./modules/copilot/copilot.routes";
+import { notificationsRouter } from "./modules/notifications/notifications.routes";
 import path from "path";
 import { env } from "./config/env";
 
@@ -44,6 +46,8 @@ app.use("/api/v1", suggestionsRouter);
 app.use("/api/v1/dashboard", dashboardRouter);
 app.use("/api/v1", chatsRouter);
 app.use("/api/v1", documentsRouter);
+app.use("/api/v1", copilotRouter);
+app.use("/api/v1", notificationsRouter);
 
 // Static audio uploads (only for development; behind auth in real prod)
 app.use(

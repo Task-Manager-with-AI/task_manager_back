@@ -28,6 +28,26 @@ const envSchema = z.object({
   DOCUMENT_ASSET_MAX_FILE_SIZE_MB: z.coerce.number().int().min(1).default(200),
   DOCS_VERSION_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
   DOCS_SNAPSHOT_INTERVAL_MS: z.coerce.number().int().min(30_000).default(300_000),
+  // ── RAG Copilot (Sprint 3) ──────────────────────────────────────────────
+  /** Embedding vector dimension — MUST match the AI backend EMBEDDING_DIM and the pgvector column. */
+  EMBEDDING_DIM: z.coerce.number().int().min(1).default(1536),
+  /** Default number of chunks retrieved per semantic search. */
+  RAG_TOP_K: z.coerce.number().int().min(1).default(8),
+  /** Max iterations of the agent tool-calling loop (safety cap). */
+  COPILOT_MAX_TOOL_ITERATIONS: z.coerce.number().int().min(1).default(6),
+  /** Enable the background indexing worker on server start. */
+  COPILOT_INDEXING_WORKER_ENABLED: z.coerce.boolean().default(true),
+  /** Polling interval (ms) of the indexing worker. */
+  COPILOT_INDEXING_POLL_MS: z.coerce.number().int().min(1000).default(5000),
+  // ── Notifications (Sprint 3) ────────────────────────────────────────────
+  /** VAPID keys for Web Push. If unset, push is disabled (in-app still works). */
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().default("mailto:soporte@taskmanager.app"),
+  /** Minutes before a scheduled meeting to send a reminder. */
+  NOTIF_MEETING_REMINDER_MIN: z.coerce.number().int().min(1).default(15),
+  /** Enable the background jobs (meeting reminders + task deadlines). */
+  NOTIF_JOBS_ENABLED: z.coerce.boolean().default(true),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -14,6 +14,7 @@ import type {
   UpdateProjectDto,
   AddMemberDto,
 } from "./projects.schema";
+import { notifySafe } from "../notifications/notifications.service";
 
 export async function listProjects(userId: string) {
   return findProjectsByUser(userId);
@@ -49,7 +50,11 @@ export async function deleteProject(id: string) {
   return softDeleteProject(id);
 }
 
-export async function addProjectMember(projectId: string, dto: AddMemberDto) {
+export async function addProjectMember(
+  projectId: string,
+  dto: AddMemberDto,
+  actorId?: string
+) {
   const project = await findProjectById(projectId);
   if (!project || project.status === "INACTIVE") {
     throw new AppError("Project not found", 404);
@@ -61,7 +66,18 @@ export async function addProjectMember(projectId: string, dto: AddMemberDto) {
   }
 
   try {
-    return await addMember({ projectId, userId: dto.userId, memberRole: dto.memberRole });
+    const member = await addMember({
+      projectId,
+      userId: dto.userId,
+      memberRole: dto.memberRole,
+    });
+    notifySafe({
+      type: "PROJECT_MEMBER_ADDED",
+      recipientIds: [dto.userId],
+      actorId,
+      data: { projectId, projectName: project.name },
+    });
+    return member;
   } catch (err: unknown) {
     const e = err as { code?: string };
     if (e?.code === "P2002") throw new AppError("User is already a member", 409);

@@ -37,3 +37,31 @@ export function createYjsStateFromPlainText(plainText: string): Buffer {
   applyPlainTextToProseMirrorFragment(fragment, plainText);
   return Buffer.from(Y.encodeStateAsUpdate(ydoc));
 }
+
+/**
+ * Extract plain text from an encoded Yjs document state (the inverse of
+ * createYjsStateFromPlainText). Used by the RAG indexer to read live-edited
+ * documents whose DocumentVersion.plainText was never populated.
+ */
+export function extractPlainTextFromState(state: Uint8Array): string {
+  const ydoc = new Y.Doc();
+  Y.applyUpdate(ydoc, state);
+  const fragment = ydoc.getXmlFragment("prosemirror");
+  const blocks: string[] = [];
+
+  const walk = (node: Y.XmlElement | Y.XmlText | Y.XmlFragment): string => {
+    if (node instanceof Y.XmlText) return node.toString();
+    let text = "";
+    node.forEach((child) => {
+      text += walk(child as Y.XmlElement | Y.XmlText);
+    });
+    return text;
+  };
+
+  fragment.forEach((child) => {
+    const block = walk(child as Y.XmlElement | Y.XmlText).trim();
+    if (block) blocks.push(block);
+  });
+
+  return blocks.join("\n\n");
+}

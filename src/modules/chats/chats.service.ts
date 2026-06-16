@@ -5,6 +5,7 @@ import { isUserOnline } from "../../signaling/presence";
 import { emitChatEvent } from "../../signaling/chat.signaling";
 import * as fileStorage from "../../services/file-storage.service";
 import * as aiClient from "../../services/ai-client.service";
+import { notifySafe } from "../notifications/notifications.service";
 import * as repo from "./chats.repository";
 import type { MessageWithRelations } from "./chats.repository";
 import type {
@@ -277,7 +278,37 @@ async function emitAndSerialize(message: MessageWithRelations, viewerId: string)
   // for accurate status; emit a viewer-neutral payload and let clients refine.
   const payload = serializeMessage(message, message.senderId ?? viewerId, others);
   emitChatEvent("chat:new-message", message.chatId, ids, payload);
+  // Out-of-band notification for recipients (coalesced per chat).
+  void notifyNewMessage(message, others.map((o) => o.userId));
   return serializeMessage(message, viewerId, others);
+}
+
+/** Raise a CHAT_MESSAGE / CHAT_DIRECT_MESSAGE notification for recipients. */
+async function notifyNewMessage(
+  message: MessageWithRelations,
+  recipientIds: string[]
+) {
+  if (recipientIds.length === 0) return;
+  const chat = await prisma.chat.findUnique({
+    where: { id: message.chatId },
+    select: { type: true, project: { select: { name: true } } },
+  });
+  if (!chat) return;
+  const senderName = message.sender?.name ?? "Alguien";
+  const preview =
+    message.type === "TEXT" ? message.content : "📎 Archivo adjunto";
+
+  notifySafe({
+    type: chat.type === "DIRECT" ? "CHAT_DIRECT_MESSAGE" : "CHAT_MESSAGE",
+    recipientIds,
+    actorId: message.senderId ?? undefined,
+    data: {
+      actorName: senderName,
+      chatId: message.chatId,
+      chatName: chat.type === "DIRECT" ? senderName : chat.project?.name ?? "Chat del proyecto",
+      preview,
+    },
+  });
 }
 
 export async function editMessage(
