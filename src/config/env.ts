@@ -48,6 +48,8 @@ const envSchema = z.object({
   NOTIF_MEETING_REMINDER_MIN: z.coerce.number().int().min(1).default(15),
   /** Enable the background jobs (meeting reminders + task deadlines). */
   NOTIF_JOBS_ENABLED: z.coerce.boolean().default(true),
+  /** Max Prisma pool size — keep low when using Supabase pooler (default 15). */
+  DATABASE_CONNECTION_LIMIT: z.coerce.number().int().min(1).max(50).default(5),
 });
 
 const parsed = envSchema.safeParse(process.env);

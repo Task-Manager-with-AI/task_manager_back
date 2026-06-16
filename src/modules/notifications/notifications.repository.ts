@@ -100,6 +100,21 @@ export function getPreferences(userId: string) {
   return prisma.notificationPreference.findMany({ where: { userId } });
 }
 
+export async function getPreferencesForUsers(userIds: string[]) {
+  if (userIds.length === 0) return new Map<string, Awaited<ReturnType<typeof getPreferences>>>();
+
+  const rows = await prisma.notificationPreference.findMany({
+    where: { userId: { in: userIds } },
+  });
+
+  const byUser = new Map<string, Awaited<ReturnType<typeof getPreferences>>>();
+  for (const userId of userIds) byUser.set(userId, []);
+  for (const row of rows) {
+    byUser.get(row.userId)?.push(row);
+  }
+  return byUser;
+}
+
 export function upsertPreference(
   userId: string,
   category: NotificationCategory,

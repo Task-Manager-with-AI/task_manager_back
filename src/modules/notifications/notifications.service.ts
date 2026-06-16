@@ -43,39 +43,37 @@ export async function notify(input: NotifyInput): Promise<void> {
   const category = built.category;
   const payloadData = { ...data, url: built.url ?? data.url };
 
-  await Promise.all(
-    recipients.map(async (userId) => {
-      const prefs = await getCategoryPrefs(userId, category);
-      if (!prefs.inApp) return; // user opted out of this category in-app
+  const prefsByUser = await repo.getPreferencesForUsers(recipients);
 
-      const notification = await repo.createOrCoalesce({
-        userId,
-        type,
-        category,
+  for (const userId of recipients) {
+    const prefs = categoryPrefsFromRows(prefsByUser.get(userId) ?? [], category);
+    if (!prefs.inApp) continue;
+
+    const notification = await repo.createOrCoalesce({
+      userId,
+      type,
+      category,
+      title: built.title,
+      body: built.body,
+      data: payloadData,
+      actorId,
+      projectId: data.projectId,
+      groupKey: built.groupKey,
+    });
+
+    emitToUser(userId, "notification:new", serialize(notification));
+    const count = await repo.unreadCount(userId);
+    emitToUser(userId, "notification:unread-count", { count });
+
+    if (prefs.push && !isUserOnline(userId)) {
+      void push.sendToUser(userId, {
         title: built.title,
         body: built.body,
-        data: payloadData,
-        actorId,
-        projectId: data.projectId,
-        groupKey: built.groupKey,
+        url: built.url ?? data.url,
+        notificationId: notification.id,
       });
-
-      // Realtime in-app delivery.
-      emitToUser(userId, "notification:new", serialize(notification));
-      const count = await repo.unreadCount(userId);
-      emitToUser(userId, "notification:unread-count", { count });
-
-      // Web Push only when the user is offline and opted in.
-      if (prefs.push && !isUserOnline(userId)) {
-        void push.sendToUser(userId, {
-          title: built.title,
-          body: built.body,
-          url: built.url ?? data.url,
-          notificationId: notification.id,
-        });
-      }
-    })
-  );
+    }
+  }
 }
 
 /** Fire-and-forget variant for use inside domain services (never throws up). */
@@ -85,13 +83,11 @@ export function notifySafe(input: NotifyInput): void {
   });
 }
 
-async function getCategoryPrefs(
-  userId: string,
+function categoryPrefsFromRows(
+  prefs: Awaited<ReturnType<typeof repo.getPreferences>>,
   category: NotificationCategory
-): Promise<{ inApp: boolean; push: boolean }> {
-  const prefs = await repo.getPreferences(userId);
+): { inApp: boolean; push: boolean } {
   const match = prefs.find((p) => p.category === category);
-  // Default: everything on in-app + push (email off).
   return { inApp: match?.inApp ?? true, push: match?.push ?? true };
 }
 
