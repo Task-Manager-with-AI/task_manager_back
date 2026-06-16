@@ -82,6 +82,15 @@ export const createConversionJobSchema = z.object({
   requestedFileName: z.string().trim().max(255).optional(),
 });
 
+export const diagramTypeSchema = z.enum(["class", "use_case", "sequence", "activity", "component", "deployment"]);
+
+export const createGeneratedDiagramSchema = z.object({
+  prompt: z.string().trim().min(1, "Prompt is required").max(10000),
+  diagram_type: diagramTypeSchema,
+  documentId: z.string().uuid().optional(),
+  title: z.string().trim().min(1).max(180).optional(),
+});
+
 export const conversionJobCallbackSchema = z.object({
   documentId: z.string().uuid(),
   status: z.enum(["QUEUED", "PROCESSING", "COMPLETED", "FAILED", "CANCELED"]),
@@ -114,4 +123,6 @@ export type ListVersionsQueryDto = z.infer<typeof listVersionsQuerySchema>;
 export type GetDiffQueryDto = z.infer<typeof getDiffQuerySchema>;
 export type RestoreVersionDto = z.infer<typeof restoreVersionSchema>;
 export type CreateConversionJobDto = z.infer<typeof createConversionJobSchema>;
+export type CreateGeneratedDiagramDto = z.infer<typeof createGeneratedDiagramSchema>;
+export type DiagramTypeDto = z.infer<typeof diagramTypeSchema>;
 export type ConversionJobCallbackDto = z.infer<typeof conversionJobCallbackSchema>;

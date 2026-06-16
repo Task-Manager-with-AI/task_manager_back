@@ -29,19 +29,29 @@ export async function storeDocumentAsset(
   const suffix = crypto.randomBytes(6).toString("hex");
   const relativeKey = `documents/assets/${documentId}/${suffix}-${safeFileName}`;
 
+  return storeManagedAsset(relativeKey, mimeType, buffer);
+}
+
+export async function storeManagedAsset(
+  relativeKey: string,
+  mimeType: string,
+  buffer: Buffer
+): Promise<string> {
+  const normalizedKey = sanitizeRelativeKey(relativeKey);
+
   if (shouldUseS3ForWrite()) {
     try {
-      await storeInS3(relativeKey, mimeType, buffer);
-      return relativeKey;
+      await storeInS3(normalizedKey, mimeType, buffer);
+      return normalizedKey;
     } catch (error) {
       if (env.DOCUMENT_ASSET_STORAGE_MODE === "auto" && isS3AccessDenied(error)) {
-        return storeInLocal(relativeKey, buffer);
+        return storeInLocal(normalizedKey, buffer);
       }
       throw mapS3Error(error);
     }
   }
 
-  return storeInLocal(relativeKey, buffer);
+  return storeInLocal(normalizedKey, buffer);
 }
 
 export async function getDocumentAssetStream(assetKey: string): Promise<{
@@ -223,4 +233,17 @@ function sanitizeFileName(fileName: string): string {
   const name = parsed.name.replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "");
   const ext = parsed.ext.replace(/[^a-z0-9.]+/gi, "");
   return `${name || "asset"}${ext}`;
+}
+
+function sanitizeRelativeKey(relativeKey: string): string {
+  const normalized = relativeKey
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "")
+    .replace(/\/{2,}/g, "/");
+
+  if (!normalized || normalized.startsWith("..") || normalized.includes("/../")) {
+    throw new AppError("Invalid storage key", 400);
+  }
+
+  return normalized;
 }

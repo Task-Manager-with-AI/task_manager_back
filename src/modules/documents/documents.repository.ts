@@ -7,6 +7,7 @@
 } from "@prisma/client";
 import { prisma } from "../../prisma/client";
 import type {
+  DiagramTypeDto,
   CreateDocumentDto,
   UpdateDocumentDto,
 } from "./documents.schema";
@@ -194,6 +195,33 @@ const conversionJobSelect = {
   finishedAt: true,
   createdAt: true,
   updatedAt: true,
+  createdBy: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+  },
+};
+
+const generatedDiagramSelect = {
+  id: true,
+  projectId: true,
+  documentId: true,
+  title: true,
+  diagramType: true,
+  prompt: true,
+  storageKey: true,
+  publicUrl: true,
+  createdById: true,
+  createdAt: true,
+  updatedAt: true,
+  document: {
+    select: {
+      id: true,
+      title: true,
+    },
+  },
   createdBy: {
     select: {
       id: true,
@@ -685,6 +713,70 @@ export function pruneDocumentVersionsOlderThan(documentId: string, olderThan: Da
         not: "checkpoint",
       },
     },
+  });
+}
+
+export function createGeneratedDiagram(data: {
+  id: string;
+  projectId: string;
+  documentId?: string | null;
+  title: string;
+  diagramType: DiagramTypeDto;
+  prompt?: string | null;
+  storageKey: string;
+  publicUrl: string;
+  createdById: string;
+}) {
+  return prisma.generatedDiagram.create({
+    data: {
+      id: data.id,
+      projectId: data.projectId,
+      documentId: data.documentId ?? null,
+      title: data.title,
+      diagramType: data.diagramType,
+      prompt: data.prompt ?? null,
+      storageKey: data.storageKey,
+      publicUrl: data.publicUrl,
+      createdById: data.createdById,
+    },
+    select: generatedDiagramSelect,
+  });
+}
+
+export function listGeneratedDiagramsByProject(projectId: string) {
+  return prisma.generatedDiagram.findMany({
+    where: { projectId },
+    select: generatedDiagramSelect,
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+}
+
+export function listGeneratedDiagramsByDocument(documentId: string) {
+  return prisma.generatedDiagram.findMany({
+    where: { documentId },
+    select: generatedDiagramSelect,
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+}
+
+export function findGeneratedDiagramForUser(diagramId: string, userId: string) {
+  return prisma.generatedDiagram.findFirst({
+    where: {
+      id: diagramId,
+      project: {
+        members: {
+          some: {
+            userId,
+            isActive: true,
+          },
+        },
+      },
+    },
+    select: generatedDiagramSelect,
   });
 }
 

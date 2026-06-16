@@ -4,6 +4,7 @@
   DocumentSuggestionStatus,
   Prisma,
 } from "@prisma/client";
+import { randomUUID } from "crypto";
 import { buffer as readStreamBuffer } from "stream/consumers";
 import { env } from "../../config/env";
 import { prisma } from "../../prisma/client";
@@ -13,8 +14,10 @@ import { createYjsStateFromPlainText } from "../../collaboration/prosemirror-pla
 import {
   deleteDocumentAssetObject,
   getDocumentAssetStream,
+  storeManagedAsset,
   storeDocumentAsset,
 } from "../../services/document-asset-storage.service";
+import { aiFetch } from "../../services/ai-fetch.service";
 import { dispatchDocumentConversionJob } from "../../services/document-conversion.service";
 import type {
   CreateCommentDto,
@@ -22,8 +25,10 @@ import type {
   ConversionJobCallbackDto,
   CreateConversionJobDto,
   CreateDocumentDto,
+  CreateGeneratedDiagramDto,
   CreateSuggestionDto,
   CreateVersionDto,
+  DiagramTypeDto,
   DocumentPermissionRoleDto,
   ResolveSuggestionDto,
   RestoreVersionDto,
@@ -39,6 +44,7 @@ import {
   createDocumentAsset,
   createDocumentSuggestion,
   createDocumentVersion,
+  createGeneratedDiagram,
   deleteDocumentAsset,
   findCommentThread,
   findConversionJob,
@@ -46,12 +52,15 @@ import {
   findDocumentAccessForUser,
   findDocumentAsset,
   findDocumentForUser,
+  findGeneratedDiagramForUser,
   findDocumentStateForUser,
   findDocumentSuggestion,
   findDocumentVersion,
   listCommentThreads,
   listConversionJobs,
   listDocumentAssets,
+  listGeneratedDiagramsByDocument,
+  listGeneratedDiagramsByProject,
   listDocumentPermissions,
   listDocumentsByProject,
   listDocumentSuggestions,
@@ -65,6 +74,8 @@ import {
   updateDocumentTitle,
 } from "./documents.repository";
 
+const DIAGRAM_MIME_TYPE = "image/png";
+
 export async function listProjectDocuments(projectId: string) {
   return listDocumentsByProject(projectId);
 }
@@ -76,6 +87,87 @@ export async function createProjectDocument(
 ) {
   await ensureProjectMembership(projectId, userId);
   return createDocument(projectId, userId, dto);
+}
+
+export async function createGeneratedDiagramForProject(
+  projectId: string,
+  userId: string,
+  dto: CreateGeneratedDiagramDto
+) {
+  await ensureProjectMembership(projectId, userId);
+
+  if (dto.documentId) {
+    const role = await getDocumentAccessRole(dto.documentId, userId);
+    ensureRoleAtLeast(role, DocumentPermissionRole.EDITOR);
+
+    const document = await findDocumentForUser(dto.documentId, userId);
+    if (!document) {
+      throw new AppError("Document not found or access denied", 404);
+    }
+    if (document.projectId !== projectId) {
+      throw new AppError("Document does not belong to the provided project", 400);
+    }
+  }
+
+  const aiResult = await requestEnterpriseArchitectDiagram(dto.prompt, dto.diagram_type);
+  const imageBuffer = await downloadGeneratedDiagram(aiResult.url);
+  const diagramId = randomUUID();
+  const fileName = buildGeneratedDiagramFileName(dto.diagram_type, dto.title);
+  const storageKey = await storeManagedAsset(
+    `projects/${projectId}/generated-diagrams/${diagramId}/${fileName}`,
+    DIAGRAM_MIME_TYPE,
+    imageBuffer
+  );
+  const publicUrl = `/api/v1/diagrams/${diagramId}/content`;
+
+  const diagram = await createGeneratedDiagram({
+    id: diagramId,
+    projectId,
+    documentId: dto.documentId,
+    title: buildGeneratedDiagramTitle(dto.title, dto.diagram_type, dto.prompt),
+    diagramType: dto.diagram_type,
+    prompt: dto.prompt,
+    storageKey,
+    publicUrl,
+    createdById: userId,
+  });
+
+  if (dto.documentId) {
+    await createAuditLog({
+      documentId: dto.documentId,
+      actorId: userId,
+      eventType: "document.diagram.generated",
+      details: {
+        diagramId: diagram.id,
+        diagramType: diagram.diagramType,
+      },
+    });
+  }
+
+  return diagram;
+}
+
+export async function listProjectGeneratedDiagrams(projectId: string, userId: string) {
+  await ensureProjectMembership(projectId, userId);
+  return listGeneratedDiagramsByProject(projectId);
+}
+
+export async function listDocumentGeneratedDiagrams(documentId: string, userId: string) {
+  await getDocumentAccessRole(documentId, userId);
+  return listGeneratedDiagramsByDocument(documentId);
+}
+
+export async function streamGeneratedDiagram(diagramId: string, userId: string) {
+  const diagram = await findGeneratedDiagramForUser(diagramId, userId);
+  if (!diagram) {
+    throw new AppError("Diagram not found or access denied", 404);
+  }
+
+  const streamData = await getDocumentAssetStream(diagram.storageKey);
+  return {
+    diagram,
+    ...streamData,
+  };
 }
 
 export async function getDocument(documentId: string, userId: string) {
@@ -790,6 +882,112 @@ export async function handleConversionJobCallback(
   });
 
   return updated;
+}
+
+async function requestEnterpriseArchitectDiagram(
+  prompt: string,
+  diagramType: DiagramTypeDto
+): Promise<{ url: string }> {
+  const response = await aiFetch(
+    `${env.AI_BACKEND_URL}/api/v1/ea/generate`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt,
+        diagram_type: diagramType,
+      }),
+    },
+    "enterprise architect diagram generation"
+  );
+
+  if (!response.ok) {
+    let message = "Enterprise Architect could not generate the diagram";
+
+    try {
+      const payload = (await response.json()) as { detail?: string; message?: string };
+      if (typeof payload.detail === "string" && payload.detail.trim()) {
+        message = payload.detail.trim();
+      } else if (typeof payload.message === "string" && payload.message.trim()) {
+        message = payload.message.trim();
+      }
+    } catch {
+      // Ignore invalid JSON and keep the fallback message.
+    }
+
+    throw new AppError(message, response.status >= 400 && response.status < 500 ? 400 : 502);
+  }
+
+  const payload = (await response.json()) as {
+    status?: string;
+    url?: string;
+    message?: string;
+  };
+
+  if (payload.status !== "success" || !payload.url) {
+    throw new AppError(
+      payload.message?.trim() || "EA generation completed without a downloadable image",
+      502
+    );
+  }
+
+  return { url: payload.url };
+}
+
+async function downloadGeneratedDiagram(sourceUrl: string): Promise<Buffer> {
+  const resolvedUrl = new URL(sourceUrl, env.AI_BACKEND_URL).toString();
+  const response = await aiFetch(resolvedUrl, { method: "GET" }, "enterprise architect diagram download");
+
+  if (!response.ok) {
+    throw new AppError("Generated diagram image could not be downloaded from the AI service", 502);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+function buildGeneratedDiagramTitle(
+  explicitTitle: string | undefined,
+  diagramType: DiagramTypeDto,
+  prompt: string
+) {
+  if (explicitTitle?.trim()) {
+    return explicitTitle.trim();
+  }
+
+  const promptTitle = prompt
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+
+  if (promptTitle) {
+    return promptTitle;
+  }
+
+  return `${humanizeDiagramType(diagramType)} ${new Date().toLocaleString("sv-SE").replace(" ", "-")}`;
+}
+
+function buildGeneratedDiagramFileName(
+  diagramType: DiagramTypeDto,
+  explicitTitle: string | undefined
+) {
+  const baseName = (explicitTitle?.trim() || humanizeDiagramType(diagramType))
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return `${baseName || "diagram"}.png`;
+}
+
+function humanizeDiagramType(diagramType: DiagramTypeDto) {
+  if (diagramType === "use_case") return "Use Case Diagram";
+  if (diagramType === "sequence") return "Sequence Diagram";
+  if (diagramType === "activity") return "Activity Diagram";
+  if (diagramType === "component") return "Component Diagram";
+  if (diagramType === "deployment") return "Deployment Diagram";
+  return "Class Diagram";
 }
 
 function ensureRoleAtLeast(

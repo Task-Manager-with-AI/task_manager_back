@@ -7,6 +7,7 @@ import {
   createCommentThreadSchema,
   createConversionJobSchema,
   createDocumentSchema,
+  createGeneratedDiagramSchema,
   createSuggestionSchema,
   createVersionSchema,
   conversionJobCallbackSchema,
@@ -23,6 +24,7 @@ import {
   createCommentThreadForDocument,
   createConversionJobForDocument,
   createProjectDocument,
+  createGeneratedDiagramForProject,
   createSuggestionForDocument,
   createVersionForDocument,
   deleteDocument,
@@ -33,8 +35,10 @@ import {
   listCommentThreadsForDocument,
   listConversionJobsForDocument,
   listDocumentAssetsForUser,
+  listDocumentGeneratedDiagrams,
   listPermissionsForDocument,
   listProjectDocuments,
+  listProjectGeneratedDiagrams,
   listSuggestionsForDocument,
   listVersionsForDocument,
   handleConversionJobCallback,
@@ -44,6 +48,7 @@ import {
   resolveCommentThreadForDocument,
   resolveSuggestionForDocument,
   restoreDocumentVersion,
+  streamGeneratedDiagram,
   updatePermissionsForDocument,
   uploadDocumentAsset,
 } from "./documents.service";
@@ -74,6 +79,82 @@ export async function createDocumentController(
       dto
     );
     sendCreated(res, document, "Document created");
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function createGeneratedDiagramController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const dto = createGeneratedDiagramSchema.parse(req.body);
+    const diagram = await createGeneratedDiagramForProject(
+      req.params["projectId"] as string,
+      req.user!.id,
+      dto
+    );
+    sendCreated(res, diagram, "Diagram created");
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function listProjectGeneratedDiagramsController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const diagrams = await listProjectGeneratedDiagrams(
+      req.params["projectId"] as string,
+      req.user!.id
+    );
+    sendSuccess(res, diagrams);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function listDocumentGeneratedDiagramsController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const diagrams = await listDocumentGeneratedDiagrams(
+      req.params["documentId"] as string,
+      req.user!.id
+    );
+    sendSuccess(res, diagrams);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function downloadGeneratedDiagramController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { diagram, stream, contentType, contentLength } = await streamGeneratedDiagram(
+      req.params["diagramId"] as string,
+      req.user!.id
+    );
+
+    const safeTitle = diagram.title.replace(/["\\]/g, "_");
+    res.setHeader("Content-Type", contentType ?? "image/png");
+    res.setHeader("Content-Disposition", `inline; filename="${safeTitle}.png"`);
+
+    if (typeof contentLength === "number") {
+      res.setHeader("Content-Length", contentLength.toString());
+    }
+
+    stream.on("error", (err) => next(err));
+    stream.pipe(res);
   } catch (err) {
     next(err);
   }
