@@ -1,0 +1,39 @@
+NODE_ENV=development
+# Supabase database URL
+# DATABASE_URL=postgresql://postgres.ogigcozfjzrqdyhsnizr:LPQWW8kWsi7jhDT0@aws-1-us-west-2.pooler.supabase.com:5432/postgres
+# Desarrollo
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agile_ai_db
+JWT_SECRET=change_me_minimum_32_characters_long
+JWT_EXPIRES_IN=1d
+COOKIE_NAME=access_token
+BACKEND_PORT=4000
+COLLABORATION_PORT=4001
+FRONTEND_URL=http://localhost:3000
+
+# Sprint 2: AI + Audio
+AI_BACKEND_URL=http://localhost:8000
+# Timeout for AI HTTP calls (ms). Increase for long meetings on CPU Whisper (default 15 min)
+AI_FETCH_TIMEOUT_MS=900000
+AUDIO_UPLOAD_DIR=./public/uploads/audio
+CHAT_UPLOAD_DIR=./public/uploads/chat
+
+# Optional: private S3 storage for meeting audio/video and chat attachments.
+# If AWS_REGION and AWS_S3_BUCKET are configured, uploads use S3.
+# If they are omitted or empty, uploads fall back to local directories above.
+AWS_REGION=us-east-1
+AWS_S3_BUCKET=tu_bucket_privado
+AWS_S3_AUDIO_PREFIX=meetings/audio
+AWS_S3_CHAT_PREFIX=chat/attachments
+AWS_ACCESS_KEY_ID=your_access_key_id
+AWS_SECRET_ACCESS_KEY=your_secret_access_key
+DOCUMENT_ASSET_STORAGE_MODE=auto
+DOCUMENT_ASSET_LOCAL_DIR=./public/uploads/documents
+
+# Optional: dedicated DOCX conversion microservice.
+# DOCX_CONVERTER_URL=http://localhost:8000/api/v1/docx
+DOCX_CONVERTER_CALLBACK_SECRET=local-docx-callback-secret
+DOCUMENT_ASSET_MAX_FILE_SIZE_MB=200
+
+# Document versioning defaults
+DOCS_VERSION_RETENTION_DAYS=90
+DOCS_SNAPSHOT_INTERVAL_MS=300000
