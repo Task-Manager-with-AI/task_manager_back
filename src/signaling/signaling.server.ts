@@ -8,6 +8,7 @@ import {
   markParticipantJoined,
   markParticipantLeft,
 } from "../modules/meetings/meetings.service";
+import { registerChatHandlers } from "./chat.signaling";
 
 const secret = new TextEncoder().encode(env.JWT_SECRET);
 
@@ -211,5 +212,9 @@ export function setupSignaling(httpServer: HttpServer) {
   }
 
   ioInstance = io;
+
+  // Register chat handlers on the same authenticated server.
+  registerChatHandlers(io);
+
   return io;
 }

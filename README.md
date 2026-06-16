@@ -5,7 +5,7 @@ Backend principal del sistema Task Manager AI. Esta API esta construida con Node
 ## Requisitos
 
 - Node.js 20 o superior
-- npm 9 o superior
+- pnpm 10 o superior
 - PostgreSQL corriendo localmente
 - Una base de datos llamada `agile_ai_db`
 
@@ -27,21 +27,7 @@ cd D:\Proyecto_grado\task_manager_back
 
 La primera vez que levantes el backend, instala las dependencias:
 
-```powershell
-npm install
-```
-
-Tambien puedes usar:
-
-```powershell
-npm ci
-```
-
-`npm ci` usa exactamente las versiones del `package-lock.json`, por eso es buena opcion cuando el proyecto ya trae ese archivo.
-
-### Usando pnpm
-
-Si prefieres usar `pnpm`, instala las dependencias asi:
+Este proyecto usa `pnpm` como package manager. Instala las dependencias asi:
 
 ```powershell
 pnpm install
@@ -98,6 +84,7 @@ JWT_SECRET=local_development_secret_32_chars_minimum
 JWT_EXPIRES_IN=1d
 COOKIE_NAME=access_token
 BACKEND_PORT=4000
+COLLABORATION_PORT=4001
 FRONTEND_URL=http://localhost:3000
 AI_BACKEND_URL=http://localhost:8000
 AI_FETCH_TIMEOUT_MS=900000
@@ -110,6 +97,7 @@ Importante:
 - Por defecto se usa la base de datos `agile_ai_db`.
 - `JWT_SECRET` debe tener al menos 32 caracteres.
 - `AI_BACKEND_URL` apunta al backend de IA. Para levantar solo el backend principal, puede quedarse como `http://localhost:8000`, aunque el servicio de IA aun no este encendido.
+- `COLLABORATION_PORT` levanta Hocuspocus/Yjs para documentos colaborativos. En local se usa `ws://localhost:4001/collaboration`.
 
 ### Almacenamiento de audios en S3
 
@@ -141,6 +129,35 @@ s3://bucket/key
 
 No subas credenciales AWS a Git. Mantenlas solo en `.env`.
 
+### Documentos colaborativos
+
+El backend Node tambien levanta el servidor colaborativo Hocuspocus/Yjs en el mismo proceso, usando el puerto configurado en `COLLABORATION_PORT`.
+
+En local:
+
+```text
+API REST: http://localhost:4000/api/v1
+WebSocket documentos: ws://localhost:4001/collaboration
+Frontend: http://localhost:3000
+```
+
+El frontend debe tener:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
+NEXT_PUBLIC_COLLABORATION_URL=ws://localhost:4001/collaboration
+```
+
+Validacion manual recomendada:
+
+1. Crear un documento desde `/projects/:projectId/documents`.
+2. Abrir el mismo documento en dos navegadores o sesiones.
+3. Editar simultaneamente y confirmar que ambos ven los cambios.
+4. Recargar y confirmar que el contenido persiste.
+5. Reiniciar el backend y confirmar que el documento vuelve a cargar.
+6. Subir, descargar y eliminar un adjunto.
+7. Intentar abrir el documento con un usuario que no pertenece al proyecto y confirmar bloqueo.
+
 ## 4. Crear la base de datos local
 
 Abre PostgreSQL y crea la base de datos:
@@ -162,7 +179,7 @@ Si la base de datos ya existe, puedes continuar con el siguiente paso.
 Con PostgreSQL corriendo y el `.env` configurado:
 
 ```powershell
-npx prisma migrate dev
+pnpm exec prisma migrate dev
 ```
 
 Esto crea o actualiza las tablas necesarias en la base de datos.
@@ -172,7 +189,7 @@ Esto crea o actualiza las tablas necesarias en la base de datos.
 Normalmente `migrate dev` ya genera el cliente, pero si necesitas hacerlo manualmente:
 
 ```powershell
-npx prisma generate
+pnpm exec prisma generate
 ```
 
 ## 7. Cargar datos iniciales
@@ -180,7 +197,7 @@ npx prisma generate
 Ejecuta el seed para crear los roles iniciales:
 
 ```powershell
-npm run prisma:seed
+pnpm prisma:seed
 ```
 
 Este comando crea los roles:
@@ -194,7 +211,7 @@ Este comando crea los roles:
 Inicia el servidor:
 
 ```powershell
-npm run dev
+pnpm dev
 ```
 
 Si todo esta correcto, deberias ver una salida similar:
@@ -227,31 +244,31 @@ http://localhost:4000/api/docs
 ## Scripts disponibles
 
 ```powershell
-npm run dev
+pnpm dev
 ```
 
 Levanta el backend en modo desarrollo con recarga automatica.
 
 ```powershell
-npm run build
+pnpm build
 ```
 
 Compila TypeScript y genera la carpeta `dist`.
 
 ```powershell
-npm start
+pnpm start
 ```
 
 Ejecuta el backend compilado desde `dist/server.js`.
 
 ```powershell
-npm run prisma:migrate
+pnpm prisma:migrate
 ```
 
 Ejecuta `prisma migrate dev`.
 
 ```powershell
-npm run prisma:seed
+pnpm prisma:seed
 ```
 
 Carga datos iniciales en la base de datos.
@@ -321,11 +338,11 @@ pnpm exec prisma generate
 
 ```powershell
 cd D:\Proyecto_grado\task_manager_back
-npm install
+pnpm install
 Copy-Item .env.example .env
-npx prisma migrate dev
-npm run prisma:seed
-npm run dev
+pnpm exec prisma migrate dev
+pnpm prisma:seed
+pnpm dev
 ```
 
 Luego verifica:

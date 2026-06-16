@@ -13,6 +13,11 @@ import { tasksRouter } from "./modules/tasks/tasks.routes";
 import { meetingsRouter } from "./modules/meetings/meetings.routes";
 import { minutesRouter } from "./modules/minutes/minutes.routes";
 import { suggestionsRouter } from "./modules/suggestions/suggestions.routes";
+import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
+import { chatsRouter } from "./modules/chats/chats.routes";
+import { documentsRouter } from "./modules/documents/documents.routes";
+import { copilotRouter } from "./modules/copilot/copilot.routes";
+import { notificationsRouter } from "./modules/notifications/notifications.routes";
 import path from "path";
 import { env } from "./config/env";
 
@@ -38,11 +43,22 @@ app.use("/api/v1", tasksRouter);
 app.use("/api/v1", meetingsRouter);
 app.use("/api/v1", minutesRouter);
 app.use("/api/v1", suggestionsRouter);
+app.use("/api/v1/dashboard", dashboardRouter);
+app.use("/api/v1", chatsRouter);
+app.use("/api/v1", documentsRouter);
+app.use("/api/v1", copilotRouter);
+app.use("/api/v1", notificationsRouter);
 
 // Static audio uploads (only for development; behind auth in real prod)
 app.use(
   "/uploads/audio",
   express.static(path.resolve(env.AUDIO_UPLOAD_DIR))
+);
+// Static chat attachments (development only — production serves them via the
+// authenticated proxy /api/v1/chats/attachments/:messageId)
+app.use(
+  "/uploads/chat",
+  express.static(path.resolve(env.CHAT_UPLOAD_DIR))
 );
 
 // Swagger docs

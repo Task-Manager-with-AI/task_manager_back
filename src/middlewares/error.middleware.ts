@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import multer from "multer";
 import { ZodError } from "zod";
 import { AppError } from "../shared/errors/AppError";
 import { env } from "../config/env";
@@ -28,6 +29,25 @@ export function errorMiddleware(
       success: false,
       message: "Validation error",
       errors,
+    });
+  }
+
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({
+        success: false,
+        message: `File too large. Max size is ${env.DOCUMENT_ASSET_MAX_FILE_SIZE_MB}MB`,
+        errors: {
+          [err.field ?? "file"]: [
+            `File exceeds ${env.DOCUMENT_ASSET_MAX_FILE_SIZE_MB}MB limit`,
+          ],
+        },
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: err.message,
     });
   }
 

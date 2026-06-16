@@ -13,6 +13,8 @@ import * as audioStorage from "../../services/audio-storage.service";
 import * as aiClient from "../../services/ai-client.service";
 import { MeetingType, SprintHealth, TaskPriority } from "@prisma/client";
 import { getSignalingServer } from "../../signaling/signaling.server";
+import { enqueueSafe } from "../copilot/indexing/indexing.service";
+import { notifySafe } from "../notifications/notifications.service";
 
 export async function listProjectMeetings(projectId: string) {
   return findMeetingsByProject(projectId);
@@ -76,7 +78,7 @@ export async function createNewMeeting(
     new Set([createdById, ...dto.participantIds])
   );
 
-  return createMeeting({
+  const meeting = await createMeeting({
     title: dto.title,
     description: dto.description,
     projectId,
@@ -84,6 +86,13 @@ export async function createNewMeeting(
     scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined,
     participantIds,
   });
+  notifySafe({
+    type: "MEETING_SCHEDULED",
+    recipientIds: participantIds,
+    actorId: createdById,
+    data: { meetingId: meeting.id, meetingTitle: meeting.title, projectId },
+  });
+  return meeting;
 }
 
 export async function startMeeting(meetingId: string, userId: string) {
@@ -92,10 +101,22 @@ export async function startMeeting(meetingId: string, userId: string) {
   if (meeting.status === "ENDED" || meeting.status === "PROCESSED") {
     throw new AppError("Meeting already ended", 400);
   }
-  return updateMeetingStatus(meetingId, {
+  const started = await updateMeetingStatus(meetingId, {
     status: "IN_PROGRESS",
     startedAt: meeting.startedAt ?? new Date(),
   });
+  // Notify the other participants that the meeting has started.
+  const parts = await prisma.meetingParticipant.findMany({
+    where: { meetingId },
+    select: { userId: true },
+  });
+  notifySafe({
+    type: "MEETING_STARTED",
+    recipientIds: parts.map((p) => p.userId),
+    actorId: userId,
+    data: { meetingId, meetingTitle: meeting.title, projectId: meeting.projectId },
+  });
+  return started;
 }
 
 export async function uploadMeetingAudio(
@@ -106,6 +127,9 @@ export async function uploadMeetingAudio(
 ) {
   const meeting = await findMeetingWithMembership(meetingId, userId);
   if (!meeting) throw new AppError("Meeting not found or access denied", 404);
+  if (meeting.createdById !== userId) {
+    throw new AppError("Only the meeting host can upload meeting audio", 403);
+  }
 
   const ext = audioStorage.inferExtensionFromMime(mimeType);
   const audioUrl = await audioStorage.storeAudio(
@@ -121,6 +145,9 @@ export async function uploadMeetingAudio(
 export async function endMeetingAndProcess(meetingId: string, userId: string) {
   const meeting = await findMeetingWithMembership(meetingId, userId);
   if (!meeting) throw new AppError("Meeting not found or access denied", 404);
+  if (meeting.createdById !== userId) {
+    throw new AppError("Only the meeting host can end the meeting", 403);
+  }
 
   const updated = await updateMeetingStatus(meetingId, {
     status: "ENDED",
@@ -427,6 +454,20 @@ async function processSprintPipeline(
     minuteId: minute.id,
     meetingType: "SPRINT_PLANNING",
   });
+
+  // RAG Copilot: index the new minute + transcript.
+  enqueueSafe(meeting.projectId, "MINUTE", minute.id);
+  enqueueSafe(meeting.projectId, "MEETING_TRANSCRIPT", minute.id);
+
+  // Notify participants that the minute is ready.
+  const minuteRecipients = (meeting.participants ?? []).map(
+    (p: { userId: string }) => p.userId
+  );
+  notifySafe({
+    type: "MEETING_MINUTES_READY",
+    recipientIds: minuteRecipients,
+    data: { meetingId, meetingTitle: meeting.title, projectId: meeting.projectId },
+  });
 }
 
 async function processRegularPipeline(
@@ -487,6 +528,20 @@ async function processRegularPipeline(
     meetingId,
     minuteId: minute.id,
     meetingType: "REGULAR",
+  });
+
+  // RAG Copilot: index the new minute + transcript.
+  enqueueSafe(meeting.projectId, "MINUTE", minute.id);
+  enqueueSafe(meeting.projectId, "MEETING_TRANSCRIPT", minute.id);
+
+  // Notify participants that the minute is ready.
+  const minuteRecipients = (meeting.participants ?? []).map(
+    (p: { userId: string }) => p.userId
+  );
+  notifySafe({
+    type: "MEETING_MINUTES_READY",
+    recipientIds: minuteRecipients,
+    data: { meetingId, meetingTitle: meeting.title, projectId: meeting.projectId },
   });
 }
 

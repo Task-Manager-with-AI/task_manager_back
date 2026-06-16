@@ -39,11 +39,61 @@ enum SprintHealth {
   RED
 }
 
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+
 enum SuggestionStatus {
   PENDING
   ACCEPTED
   REJECTED
   EDITED
+}
+
+enum ChatType {
+  PROJECT
+  DIRECT
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  SYSTEM
+}
+
+enum DocumentPermissionRole {
+  VIEWER
+  COMMENTER
+  EDITOR
+}
+
+enum DocumentSuggestionType {
+  INSERT
+  DELETE
+  FORMAT
+  REPLACE
+}
+
+enum DocumentSuggestionStatus {
+  OPEN
+  ACCEPTED
+  REJECTED
+}
+
+enum DocumentConversionJobType {
+  IMPORT_DOCX
+  EXPORT_DOCX
+}
+
+enum DocumentConversionJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELED
 }
 
 model Role {
@@ -53,37 +103,61 @@ model Role {
 }
 
 model User {
-  id                    String               @id @default(uuid())
-  name                  String
-  email                 String               @unique
-  passwordHash          String
-  roleId                Int
-  isActive              Boolean              @default(true)
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
-  role                  Role                 @relation(fields: [roleId], references: [id])
-  projects              Project[]            @relation("ProjectCreator")
-  memberships           ProjectMember[]
-  tasksCreated          Task[]               @relation("TaskCreator")
-  tasksOwned            Task[]               @relation("TaskResponsible")
-  meetingsCreated       Meeting[]            @relation("MeetingCreator")
-  meetingParticipations MeetingParticipant[]
-  suggestedTasks        TaskSuggestion[]     @relation("SuggestedResponsible")
+  id                          String                  @id @default(uuid())
+  name                        String
+  email                       String                  @unique
+  passwordHash                String
+  roleId                      Int
+  isActive                    Boolean                 @default(true)
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @updatedAt
+  role                        Role                    @relation(fields: [roleId], references: [id])
+  projects                    Project[]               @relation("ProjectCreator")
+  memberships                 ProjectMember[]
+  tasksCreated                Task[]                  @relation("TaskCreator")
+  tasksOwned                  Task[]                  @relation("TaskResponsible")
+  meetingsCreated             Meeting[]               @relation("MeetingCreator")
+  meetingParticipations       MeetingParticipant[]
+  suggestedTasks              TaskSuggestion[]        @relation("SuggestedResponsible")
+  chats                       ChatParticipant[]
+  messagesSent                Message[]               @relation("MessageSender")
+  messageReactions            MessageReaction[]
+  documentsCreated            Document[]              @relation("DocumentCreator")
+  documentAssetsUploaded      DocumentAsset[]         @relation("DocumentAssetUploader")
+  documentPermissions         DocumentPermission[]    @relation("DocumentPermissionUser")
+  createdCommentThreads       CommentThread[]         @relation("CommentThreadCreator")
+  resolvedCommentThreads      CommentThread[]         @relation("CommentThreadResolver")
+  documentComments            Comment[]               @relation("CommentAuthor")
+  createdDocumentSuggestions  DocumentSuggestion[]    @relation("DocumentSuggestionCreator")
+  resolvedDocumentSuggestions DocumentSuggestion[]    @relation("DocumentSuggestionResolver")
+  createdDocumentVersions     DocumentVersion[]       @relation("DocumentVersionCreator")
+  documentAuditLogs           DocumentAuditLog[]      @relation("DocumentAuditActor")
+  documentConversionJobs      DocumentConversionJob[] @relation("DocumentConversionCreator")
+  conversationThreads         ConversationThread[]
+  notifications               Notification[]          @relation("NotificationRecipient")
+  notificationsActed          Notification[]          @relation("NotificationActor")
+  notificationPrefs           NotificationPreference[]
+  pushSubscriptions           PushSubscription[]
 }
 
 model Project {
-  id          String          @id @default(uuid())
-  name        String
-  description String?
-  status      String          @default("ACTIVE")
-  createdById String
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  createdBy   User            @relation("ProjectCreator", fields: [createdById], references: [id])
+  id            String          @id @default(uuid())
+  name          String
+  description   String?
+  status        String          @default("ACTIVE")
+  createdById   String
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  createdBy     User            @relation("ProjectCreator", fields: [createdById], references: [id])
   members       ProjectMember[]
   tasks         Task[]
   meetings      Meeting[]
   kanbanColumns KanbanColumn[]
+  sprints       Sprint[]
+  chat          Chat?
+  documents     Document[]
+  knowledgeChunks     KnowledgeChunk[]
+  conversationThreads ConversationThread[]
 }
 
 model KanbanColumn {
@@ -114,6 +188,23 @@ model ProjectMember {
   @@unique([userId, projectId])
 }
 
+model Sprint {
+  id        String       @id @default(uuid())
+  projectId String
+  name      String
+  goal      String?
+  startDate DateTime
+  endDate   DateTime
+  status    SprintStatus @default(PLANNED)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@index([projectId])
+  @@index([projectId, status])
+}
+
 model Task {
   id             String          @id @default(uuid())
   title          String
@@ -122,17 +213,23 @@ model Task {
   priority       TaskPriority    @default(MEDIUM)
   columnId       String
   projectId      String
+  sprintId       String?
+  storyPoints    Int             @default(1)
+  completedAt    DateTime?
   createdById    String
   responsibleId  String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   project        Project         @relation(fields: [projectId], references: [id])
   column         KanbanColumn    @relation(fields: [columnId], references: [id])
+  sprint         Sprint?         @relation(fields: [sprintId], references: [id])
   createdBy      User            @relation("TaskCreator", fields: [createdById], references: [id])
   responsible    User?           @relation("TaskResponsible", fields: [responsibleId], references: [id])
   taskSuggestion TaskSuggestion?
+  chatLink       ChatTaskLink?
 
   @@index([columnId])
+  @@index([sprintId])
 }
 
 model Meeting {
@@ -245,4 +342,426 @@ model AutoKanbanUpdate {
   meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   @@index([meetingId])
+}
+
+model Chat {
+  id           String            @id @default(uuid())
+  type         ChatType
+  projectId    String?           @unique
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  project      Project?          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  participants ChatParticipant[]
+  messages     Message[]
+
+  @@index([type])
+}
+
+model ChatParticipant {
+  id         String    @id @default(uuid())
+  chatId     String
+  userId     String
+  joinedAt   DateTime  @default(now())
+  lastReadAt DateTime?
+  isActive   Boolean   @default(true)
+  chat       Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id])
+
+  @@unique([chatId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String            @id @default(uuid())
+  chatId         String
+  senderId       String?
+  type           MessageType       @default(TEXT)
+  content        String
+  attachmentUrl  String?
+  attachmentMime String?
+  replyToId      String?
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime          @default(now())
+  chat           Chat              @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender         User?             @relation("MessageSender", fields: [senderId], references: [id])
+  replyTo        Message?          @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies        Message[]         @relation("MessageReplies")
+  reactions      MessageReaction[]
+  taskLink       ChatTaskLink?
+
+  @@index([chatId, createdAt])
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId, emoji])
+}
+
+model ChatTaskLink {
+  id        String  @id @default(uuid())
+  messageId String  @unique
+  taskId    String  @unique
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  task      Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id             String                  @id @default(uuid())
+  projectId      String
+  createdById    String
+  title          String
+  contentState   Bytes?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  deletedAt      DateTime?
+  project        Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy      User                    @relation("DocumentCreator", fields: [createdById], references: [id])
+  assets         DocumentAsset[]
+  permissions    DocumentPermission[]
+  commentThreads CommentThread[]
+  suggestions    DocumentSuggestion[]
+  versions       DocumentVersion[]
+  auditLogs      DocumentAuditLog[]
+  conversionJobs DocumentConversionJob[]
+
+  @@index([projectId])
+  @@index([createdById])
+}
+
+model DocumentAsset {
+  id                   String                  @id @default(uuid())
+  documentId           String
+  s3Key                String
+  fileName             String
+  mimeType             String
+  size                 Int
+  uploadedById         String
+  createdAt            DateTime                @default(now())
+  document             Document                @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploadedBy           User                    @relation("DocumentAssetUploader", fields: [uploadedById], references: [id])
+  conversionInputJobs  DocumentConversionJob[] @relation("ConversionInputAsset")
+  conversionOutputJobs DocumentConversionJob[] @relation("ConversionOutputAsset")
+
+  @@index([documentId])
+  @@index([uploadedById])
+}
+
+model DocumentPermission {
+  id         String                 @id @default(uuid())
+  documentId String
+  userId     String
+  role       DocumentPermissionRole @default(EDITOR)
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+  document   Document               @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User                   @relation("DocumentPermissionUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+  @@index([documentId])
+  @@index([userId])
+}
+
+model CommentThread {
+  id           String    @id @default(uuid())
+  documentId   String
+  createdById  String
+  anchorFrom   Int?
+  anchorTo     Int?
+  quoteText    String?
+  isResolved   Boolean   @default(false)
+  resolvedAt   DateTime?
+  resolvedById String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  document     Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy    User      @relation("CommentThreadCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  resolvedBy   User?     @relation("CommentThreadResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  comments     Comment[]
+
+  @@index([documentId, createdAt])
+  @@index([documentId, isResolved])
+}
+
+model Comment {
+  id        String        @id @default(uuid())
+  threadId  String
+  authorId  String
+  body      String
+  mentions  String[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  deletedAt DateTime?
+  thread    CommentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author    User          @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([threadId, createdAt])
+}
+
+model DocumentSuggestion {
+  id           String                   @id @default(uuid())
+  documentId   String
+  createdById  String
+  resolvedById String?
+  type         DocumentSuggestionType
+  status       DocumentSuggestionStatus @default(OPEN)
+  anchorFrom   Int?
+  anchorTo     Int?
+  note         String?
+  payload      Json?
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  resolvedAt   DateTime?
+  document     Document                 @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy    User                     @relation("DocumentSuggestionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  resolvedBy   User?                    @relation("DocumentSuggestionResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([documentId, status, createdAt])
+}
+
+model DocumentVersion {
+  id           String                  @id @default(uuid())
+  documentId   String
+  createdById  String?
+  source       String                  @default("snapshot")
+  contentState Bytes?
+  plainText    String?
+  metadata     Json?
+  createdAt    DateTime                @default(now())
+  document     Document                @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy    User?                   @relation("DocumentVersionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  exportJobs   DocumentConversionJob[] @relation("JobSourceVersion")
+  importJobs   DocumentConversionJob[] @relation("JobResultVersion")
+
+  @@index([documentId, createdAt])
+}
+
+model DocumentAuditLog {
+  id         String   @id @default(uuid())
+  documentId String
+  actorId    String?
+  eventType  String
+  details    Json?
+  createdAt  DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  actor      User?    @relation("DocumentAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([documentId, createdAt])
+}
+
+model DocumentConversionJob {
+  id                String                      @id @default(uuid())
+  documentId        String
+  createdById       String
+  type              DocumentConversionJobType
+  status            DocumentConversionJobStatus @default(QUEUED)
+  inputAssetId      String?
+  outputAssetId     String?
+  sourceVersionId   String?
+  resultVersionId   String?
+  requestedFileName String?
+  providerJobId     String?
+  errorMessage      String?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+  document          Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy         User                        @relation("DocumentConversionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  inputAsset        DocumentAsset?              @relation("ConversionInputAsset", fields: [inputAssetId], references: [id], onDelete: SetNull)
+  outputAsset       DocumentAsset?              @relation("ConversionOutputAsset", fields: [outputAssetId], references: [id], onDelete: SetNull)
+  sourceVersion     DocumentVersion?            @relation("JobSourceVersion", fields: [sourceVersionId], references: [id], onDelete: SetNull)
+  resultVersion     DocumentVersion?            @relation("JobResultVersion", fields: [resultVersionId], references: [id], onDelete: SetNull)
+
+  @@index([documentId, createdAt])
+  @@index([status, type])
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// RAG Copilot (Sprint 3) — knowledge index + conversational agent
+// See docs/sprint-3/plan/rag-agent-plan.md
+// ───────────────────────────────────────────────────────────────────────────
+
+enum KnowledgeSourceType {
+  DOCUMENT
+  MINUTE
+  MEETING_TRANSCRIPT
+  AGREEMENT
+  TASK
+  CHAT_MESSAGE
+  DAILY_ANALYSIS
+  ATTACHMENT
+}
+
+enum IndexingJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+/// One embedded chunk of project knowledge. The `embedding vector(N)` column is
+/// added via raw SQL migration (pgvector) and queried with prisma.$queryRaw —
+/// it is intentionally NOT declared here.
+model KnowledgeChunk {
+  id             String              @id @default(uuid())
+  projectId      String
+  sourceType     KnowledgeSourceType
+  sourceId       String
+  chunkIndex     Int
+  content        String
+  tokenCount     Int                 @default(0)
+  embeddingModel String
+  /// Embedding vector stored as a native Postgres double precision[]. Cosine
+  /// similarity is computed in the retrieval layer. (pgvector is a future
+  /// optimization; the target DB does not have the extension available.)
+  embedding      Float[]
+  metadata       Json?
+  contentHash    String
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  project        Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceType, sourceId, chunkIndex])
+  @@index([projectId, sourceType])
+  @@index([sourceType, sourceId])
+}
+
+/// Async indexing queue. A worker drains PENDING jobs, (re)building the chunks
+/// for a given source entity. Idempotent per (sourceType, sourceId).
+model IndexingJob {
+  id           String              @id @default(uuid())
+  projectId    String
+  sourceType   KnowledgeSourceType
+  sourceId     String
+  status       IndexingJobStatus   @default(PENDING)
+  attempts     Int                 @default(0)
+  errorMessage String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([status, createdAt])
+  @@index([sourceType, sourceId])
+}
+
+model ConversationThread {
+  id        String                @id @default(uuid())
+  projectId String
+  userId    String
+  title     String?
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+  project   Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User                  @relation(fields: [userId], references: [id])
+  messages  ConversationMessage[]
+
+  @@index([projectId, userId])
+}
+
+model ConversationMessage {
+  id        String             @id @default(uuid())
+  threadId  String
+  role      String
+  content   String
+  citations Json?
+  toolCalls Json?
+  createdAt DateTime           @default(now())
+  thread    ConversationThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Notifications (Sprint 3) — in-app realtime + push
+// See docs/sprint-3/plan/notifications-plan.md
+// ───────────────────────────────────────────────────────────────────────────
+
+enum NotificationType {
+  PROJECT_MEMBER_ADDED
+  PROJECT_ROLE_CHANGED
+  PROJECT_MEMBER_REMOVED
+  MEETING_SCHEDULED
+  MEETING_STARTED
+  MEETING_REMINDER
+  MEETING_MINUTES_READY
+  TASK_ASSIGNED
+  TASK_STATUS_CHANGED
+  TASK_DUE_SOON
+  TASK_OVERDUE
+  TASK_UPDATED
+  DOCUMENT_CREATED
+  DOCUMENT_SHARED
+  DOCUMENT_COMMENT
+  CHAT_MESSAGE
+  CHAT_MENTION
+  CHAT_DIRECT_MESSAGE
+  TASK_SUGGESTION_CREATED
+  SUGGESTION_RESOLVED
+  MENTION_IN_MINUTE
+  COPILOT_DIGEST
+}
+
+enum NotificationCategory {
+  PROJECT
+  MEETING
+  TASK
+  DOCUMENT
+  CHAT
+  AI
+  SYSTEM
+}
+
+model Notification {
+  id        String               @id @default(uuid())
+  userId    String
+  type      NotificationType
+  category  NotificationCategory
+  title     String
+  body      String?
+  data      Json?
+  actorId   String?
+  projectId String?
+  groupKey  String?
+  count     Int                  @default(1)
+  readAt    DateTime?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  user      User                 @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor     User?                @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@index([userId, groupKey])
+}
+
+model NotificationPreference {
+  id       String               @id @default(uuid())
+  userId   String
+  category NotificationCategory
+  inApp    Boolean              @default(true)
+  push     Boolean              @default(true)
+  email    Boolean              @default(false)
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

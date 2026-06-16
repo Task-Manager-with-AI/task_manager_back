@@ -190,6 +190,27 @@ export async function analyzeSprintPlanning(input: {
   return readWrapped<AnalyzeSprintResult>(res, "sprint planning analysis");
 }
 
+export interface ChatSummaryResult {
+  summary: string[];
+}
+
+export async function summarizeChat(
+  transcript: string,
+  language = "es"
+): Promise<string[]> {
+  const res = await aiFetch(
+    `${baseUrl}/api/v1/chat-summary`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transcript, language }),
+    },
+    "chat summary"
+  );
+  const data = await readWrapped<ChatSummaryResult>(res, "chat summary");
+  return data.summary;
+}
+
 export async function detectKanbanUpdates(input: {
   transcript: string;
   existing_tasks: ExistingTaskInput[];
@@ -201,4 +222,68 @@ export async function detectKanbanUpdates(input: {
     body: JSON.stringify({ language: "es", ...input }),
   }, "kanban updates detection");
   return readWrapped<DetectKanbanUpdatesResult>(res, "kanban updates detection");
+}
+
+// ── RAG Copilot (Sprint 3) ─────────────────────────────────────────────────
+
+export interface EmbeddingsResult {
+  vectors: number[][];
+  model: string;
+  dim: number;
+}
+
+/** Embed a batch of texts via the AI backend. Returns one vector per input. */
+export async function embedTexts(texts: string[]): Promise<EmbeddingsResult> {
+  const res = await aiFetch(
+    `${baseUrl}/api/v1/embeddings`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texts }),
+    },
+    "embeddings"
+  );
+  return readWrapped<EmbeddingsResult>(res, "embeddings");
+}
+
+/** Embed a single query string. */
+export async function embedQuery(text: string): Promise<number[]> {
+  const { vectors } = await embedTexts([text]);
+  return vectors[0] ?? [];
+}
+
+export interface AgentToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+export interface AgentMessage {
+  role: "system" | "user" | "assistant" | "tool";
+  content?: string | null;
+  tool_calls?: AgentToolCall[] | null;
+  tool_call_id?: string | null;
+}
+
+export interface AgentStepResult {
+  message: AgentMessage;
+  finish_reason: string;
+}
+
+/** Run one tool-calling step of the agent. The loop is orchestrated here in the backend. */
+export async function agentStep(input: {
+  messages: AgentMessage[];
+  tools: unknown[];
+  temperature?: number;
+}): Promise<AgentStepResult> {
+  const res = await aiFetch(
+    `${baseUrl}/api/v1/agent/step`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ temperature: 0.2, ...input }),
+    },
+    "agent step"
+  );
+  return readWrapped<AgentStepResult>(res, "agent step");
 }

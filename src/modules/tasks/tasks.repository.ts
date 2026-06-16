@@ -65,8 +65,16 @@ export async function updateTask(
   return prisma.task.update({ where: { id }, data, include: taskInclude });
 }
 
-export async function updateTaskColumn(id: string, columnId: string) {
-  return prisma.task.update({ where: { id }, data: { columnId }, include: taskInclude });
+export async function updateTaskColumn(
+  id: string,
+  columnId: string,
+  completedAt?: Date | null
+) {
+  return prisma.task.update({
+    where: { id },
+    data: { columnId, completedAt },
+    include: taskInclude,
+  });
 }
 
 export async function deleteTask(id: string) {
