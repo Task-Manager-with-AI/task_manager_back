@@ -10,6 +10,9 @@ import { prisma } from "../../prisma/client";
 import { AppError } from "../../shared/errors/AppError";
 import { syncPlainTextToCollaborationDocument } from "../../collaboration/collaboration.runtime";
 import { createYjsStateFromPlainText } from "../../collaboration/prosemirror-plain-text";
+import { enqueueDocumentSafe } from "../copilot/indexing/indexing.service";
+import { deleteBySource } from "../copilot/indexing/knowledge.repository";
+import { notifySafe } from "../notifications/notifications.service";
 import {
   deleteDocumentAssetObject,
   getDocumentAssetStream,
@@ -75,7 +78,33 @@ export async function createProjectDocument(
   dto: CreateDocumentDto
 ) {
   await ensureProjectMembership(projectId, userId);
-  return createDocument(projectId, userId, dto);
+  const document = await createDocument(projectId, userId, dto);
+  enqueueDocumentSafe(document.id);
+  // Notify the other active project members about the new document.
+  void prisma.project
+    .findUnique({
+      where: { id: projectId },
+      select: {
+        name: true,
+        members: { where: { isActive: true }, select: { userId: true } },
+      },
+    })
+    .then((project) => {
+      if (!project) return;
+      notifySafe({
+        type: "DOCUMENT_CREATED",
+        recipientIds: project.members.map((m) => m.userId),
+        actorId: userId,
+        data: {
+          projectId,
+          projectName: project.name,
+          documentId: document.id,
+          documentTitle: document.title,
+        },
+      });
+    })
+    .catch(() => undefined);
+  return document;
 }
 
 export async function getDocument(documentId: string, userId: string) {
@@ -139,6 +168,11 @@ export async function deleteDocument(documentId: string, userId: string) {
     actorId: userId,
     eventType: "document.deleted",
   });
+
+  // Remove the document's chunks from the knowledge index.
+  deleteBySource("DOCUMENT", documentId).catch((err) =>
+    console.error(`[copilot] failed to remove chunks for document ${documentId}`, err)
+  );
 
   return deleted;
 }
@@ -485,6 +519,9 @@ export async function createVersionForDocument(
     details: { versionId: version.id, source: dto.source },
   });
 
+  // A user explicitly saved a version → reindex the document.
+  enqueueDocumentSafe(documentId);
+
   return version;
 }
 
@@ -566,6 +603,8 @@ export async function restoreDocumentVersion(
     eventType: "document.version.restored",
     details: { sourceVersionId: version.id, restoredVersionId: restoredVersion.id },
   });
+
+  enqueueDocumentSafe(documentId);
 
   return restoredVersion;
 }
@@ -743,6 +782,8 @@ export async function handleConversionJobCallback(
       metadata: (payload.result.metadata ?? undefined) as Prisma.JsonObject | undefined,
     });
     resultVersionId = version.id;
+    // Imported/converted content now has plain text → index it.
+    enqueueDocumentSafe(payload.documentId);
   }
 
   const status = payload.status as DocumentConversionJobStatus;

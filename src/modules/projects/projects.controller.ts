@@ -89,7 +89,7 @@ export async function addMemberController(
 ) {
   try {
     const dto = addMemberSchema.parse(req.body);
-    const member = await addProjectMember(req.params["id"] as string, dto);
+    const member = await addProjectMember(req.params["id"] as string, dto, req.user!.id);
     sendCreated(res, member, "Member added");
   } catch (err) {
     next(err);

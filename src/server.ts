@@ -5,6 +5,8 @@ import { prisma } from "./prisma/client";
 import { env } from "./config/env";
 import { setupSignaling } from "./signaling/signaling.server";
 import { setupCollaboration } from "./collaboration/collaboration.server";
+import { startIndexingWorker } from "./modules/copilot/indexing/indexing.worker";
+import { startNotificationJobs } from "./modules/notifications/notifications.jobs";
 
 async function bootstrap() {
   await prisma.$connect();
@@ -13,6 +15,8 @@ async function bootstrap() {
   const httpServer = createServer(app);
   setupSignaling(httpServer);
   await setupCollaboration();
+  startIndexingWorker();
+  startNotificationJobs();
 
   httpServer.listen(env.BACKEND_PORT, () => {
     console.log(`🚀 Server running on http://localhost:${env.BACKEND_PORT}`);

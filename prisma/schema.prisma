@@ -133,6 +133,11 @@ model User {
   createdDocumentVersions     DocumentVersion[]       @relation("DocumentVersionCreator")
   documentAuditLogs           DocumentAuditLog[]      @relation("DocumentAuditActor")
   documentConversionJobs      DocumentConversionJob[] @relation("DocumentConversionCreator")
+  conversationThreads         ConversationThread[]
+  notifications               Notification[]          @relation("NotificationRecipient")
+  notificationsActed          Notification[]          @relation("NotificationActor")
+  notificationPrefs           NotificationPreference[]
+  pushSubscriptions           PushSubscription[]
 }
 
 model Project {
@@ -151,6 +156,8 @@ model Project {
   sprints       Sprint[]
   chat          Chat?
   documents     Document[]
+  knowledgeChunks     KnowledgeChunk[]
+  conversationThreads ConversationThread[]
 }
 
 model KanbanColumn {
@@ -575,4 +582,186 @@ model DocumentConversionJob {
 
   @@index([documentId, createdAt])
   @@index([status, type])
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// RAG Copilot (Sprint 3) — knowledge index + conversational agent
+// See docs/sprint-3/plan/rag-agent-plan.md
+// ───────────────────────────────────────────────────────────────────────────
+
+enum KnowledgeSourceType {
+  DOCUMENT
+  MINUTE
+  MEETING_TRANSCRIPT
+  AGREEMENT
+  TASK
+  CHAT_MESSAGE
+  DAILY_ANALYSIS
+  ATTACHMENT
+}
+
+enum IndexingJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+/// One embedded chunk of project knowledge. The `embedding vector(N)` column is
+/// added via raw SQL migration (pgvector) and queried with prisma.$queryRaw —
+/// it is intentionally NOT declared here.
+model KnowledgeChunk {
+  id             String              @id @default(uuid())
+  projectId      String
+  sourceType     KnowledgeSourceType
+  sourceId       String
+  chunkIndex     Int
+  content        String
+  tokenCount     Int                 @default(0)
+  embeddingModel String
+  /// Embedding vector stored as a native Postgres double precision[]. Cosine
+  /// similarity is computed in the retrieval layer. (pgvector is a future
+  /// optimization; the target DB does not have the extension available.)
+  embedding      Float[]
+  metadata       Json?
+  contentHash    String
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  project        Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceType, sourceId, chunkIndex])
+  @@index([projectId, sourceType])
+  @@index([sourceType, sourceId])
+}
+
+/// Async indexing queue. A worker drains PENDING jobs, (re)building the chunks
+/// for a given source entity. Idempotent per (sourceType, sourceId).
+model IndexingJob {
+  id           String              @id @default(uuid())
+  projectId    String
+  sourceType   KnowledgeSourceType
+  sourceId     String
+  status       IndexingJobStatus   @default(PENDING)
+  attempts     Int                 @default(0)
+  errorMessage String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([status, createdAt])
+  @@index([sourceType, sourceId])
+}
+
+model ConversationThread {
+  id        String                @id @default(uuid())
+  projectId String
+  userId    String
+  title     String?
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+  project   Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User                  @relation(fields: [userId], references: [id])
+  messages  ConversationMessage[]
+
+  @@index([projectId, userId])
+}
+
+model ConversationMessage {
+  id        String             @id @default(uuid())
+  threadId  String
+  role      String
+  content   String
+  citations Json?
+  toolCalls Json?
+  createdAt DateTime           @default(now())
+  thread    ConversationThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Notifications (Sprint 3) — in-app realtime + push
+// See docs/sprint-3/plan/notifications-plan.md
+// ───────────────────────────────────────────────────────────────────────────
+
+enum NotificationType {
+  PROJECT_MEMBER_ADDED
+  PROJECT_ROLE_CHANGED
+  PROJECT_MEMBER_REMOVED
+  MEETING_SCHEDULED
+  MEETING_STARTED
+  MEETING_REMINDER
+  MEETING_MINUTES_READY
+  TASK_ASSIGNED
+  TASK_STATUS_CHANGED
+  TASK_DUE_SOON
+  TASK_OVERDUE
+  TASK_UPDATED
+  DOCUMENT_CREATED
+  DOCUMENT_SHARED
+  DOCUMENT_COMMENT
+  CHAT_MESSAGE
+  CHAT_MENTION
+  CHAT_DIRECT_MESSAGE
+  TASK_SUGGESTION_CREATED
+  SUGGESTION_RESOLVED
+  MENTION_IN_MINUTE
+  COPILOT_DIGEST
+}
+
+enum NotificationCategory {
+  PROJECT
+  MEETING
+  TASK
+  DOCUMENT
+  CHAT
+  AI
+  SYSTEM
+}
+
+model Notification {
+  id        String               @id @default(uuid())
+  userId    String
+  type      NotificationType
+  category  NotificationCategory
+  title     String
+  body      String?
+  data      Json?
+  actorId   String?
+  projectId String?
+  groupKey  String?
+  count     Int                  @default(1)
+  readAt    DateTime?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  user      User                 @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor     User?                @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@index([userId, groupKey])
+}
+
+model NotificationPreference {
+  id       String               @id @default(uuid())
+  userId   String
+  category NotificationCategory
+  inApp    Boolean              @default(true)
+  push     Boolean              @default(true)
+  email    Boolean              @default(false)
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
