@@ -133,6 +133,7 @@ model User {
   createdDocumentVersions     DocumentVersion[]       @relation("DocumentVersionCreator")
   documentAuditLogs           DocumentAuditLog[]      @relation("DocumentAuditActor")
   documentConversionJobs      DocumentConversionJob[] @relation("DocumentConversionCreator")
+  generatedDiagrams           GeneratedDiagram[]      @relation("GeneratedDiagramCreator")
   conversationThreads         ConversationThread[]
   notifications               Notification[]          @relation("NotificationRecipient")
   notificationsActed          Notification[]          @relation("NotificationActor")
@@ -156,6 +157,7 @@ model Project {
   sprints       Sprint[]
   chat          Chat?
   documents     Document[]
+  diagrams      GeneratedDiagram[]
   knowledgeChunks     KnowledgeChunk[]
   conversationThreads ConversationThread[]
 }
@@ -431,8 +433,30 @@ model Document {
   versions       DocumentVersion[]
   auditLogs      DocumentAuditLog[]
   conversionJobs DocumentConversionJob[]
+  diagrams       GeneratedDiagram[]
 
   @@index([projectId])
+  @@index([createdById])
+}
+
+model GeneratedDiagram {
+  id          String   @id @default(uuid())
+  projectId   String
+  documentId  String?
+  title       String
+  diagramType String
+  prompt      String?
+  storageKey  String
+  publicUrl   String
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document    Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  createdBy   User     @relation("GeneratedDiagramCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([projectId, diagramType, createdAt])
+  @@index([documentId, createdAt])
   @@index([createdById])
 }
 

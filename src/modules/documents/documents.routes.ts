@@ -10,10 +10,12 @@ import {
   createCommentThreadController,
   createConversionJobController,
   createDocumentController,
+  createGeneratedDiagramController,
   createSuggestionController,
   createVersionController,
   deleteDocumentAssetController,
   deleteDocumentController,
+  downloadGeneratedDiagramController,
   downloadDocumentAssetController,
   getConversionJobController,
   getDocumentController,
@@ -21,8 +23,10 @@ import {
   listCommentThreadsController,
   listConversionJobsController,
   listDocumentAssetsController,
+  listDocumentGeneratedDiagramsController,
   listDocumentPermissionsController,
   listDocumentsController,
+  listProjectGeneratedDiagramsController,
   listSuggestionsController,
   listVersionsController,
   reopenCommentThreadController,
@@ -56,6 +60,20 @@ documentsRouter.post(
 );
 
 documentsRouter.get(
+  "/projects/:projectId/diagrams",
+  authMiddleware,
+  membershipMiddleware,
+  listProjectGeneratedDiagramsController
+);
+
+documentsRouter.post(
+  "/projects/:projectId/diagrams",
+  authMiddleware,
+  membershipMiddleware,
+  createGeneratedDiagramController
+);
+
+documentsRouter.get(
   "/documents/:documentId",
   authMiddleware,
   getDocumentController
@@ -71,6 +89,12 @@ documentsRouter.delete(
   "/documents/:documentId",
   authMiddleware,
   deleteDocumentController
+);
+
+documentsRouter.get(
+  "/documents/:documentId/diagrams",
+  authMiddleware,
+  listDocumentGeneratedDiagramsController
 );
 
 documentsRouter.post(
@@ -209,6 +233,12 @@ documentsRouter.post(
 documentsRouter.post(
   "/documents/conversion-jobs/:jobId/callback",
   conversionJobCallbackController
+);
+
+documentsRouter.get(
+  "/diagrams/:diagramId/content",
+  authMiddleware,
+  downloadGeneratedDiagramController
 );
 
 
