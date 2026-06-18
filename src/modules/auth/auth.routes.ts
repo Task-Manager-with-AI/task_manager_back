@@ -6,6 +6,7 @@ import {
   loginController,
   logoutController,
   meController,
+  realtimeTokenController,
 } from "./auth.controller";
 
 const authLimiter = rateLimit({
@@ -105,3 +106,19 @@ authRouter.post("/logout", authMiddleware, logoutController);
  *         description: Not authenticated
  */
 authRouter.get("/me", authMiddleware, meController);
+
+/**
+ * @openapi
+ * /auth/realtime-token:
+ *   get:
+ *     tags: [Auth]
+ *     summary: Get JWT for WebSocket clients (collaboration, Socket.IO cross-origin)
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Session token for realtime connections
+ *       401:
+ *         description: Not authenticated
+ */
+authRouter.get("/realtime-token", authMiddleware, realtimeTokenController);

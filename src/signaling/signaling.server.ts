@@ -63,9 +63,7 @@ export function setupSignaling(httpServer: HttpServer) {
 
   io.use(async (socket, next) => {
     try {
-      const rawCookie = socket.handshake.headers.cookie ?? "";
-      const parsed = cookie.parse(rawCookie);
-      const token = parsed[env.COOKIE_NAME];
+      const token = resolveHandshakeToken(socket);
       if (!token) return next(new Error("Authentication required"));
 
       const { payload } = await jwtVerify(token, secret);
@@ -217,4 +215,23 @@ export function setupSignaling(httpServer: HttpServer) {
   registerChatHandlers(io);
 
   return io;
+}
+
+function resolveHandshakeToken(socket: Socket): string | undefined {
+  const authToken = socket.handshake.auth?.token;
+  if (typeof authToken === "string" && authToken.trim()) {
+    return authToken.trim();
+  }
+
+  const queryToken = socket.handshake.query?.token;
+  if (typeof queryToken === "string" && queryToken.trim()) {
+    return queryToken.trim();
+  }
+
+  const rawCookie = socket.handshake.headers.cookie ?? "";
+  const parsed = cookie.parse(rawCookie);
+  const cookieToken = parsed[env.COOKIE_NAME];
+  return typeof cookieToken === "string" && cookieToken.trim()
+    ? cookieToken.trim()
+    : undefined;
 }

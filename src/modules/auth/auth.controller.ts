@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { registerSchema, loginSchema } from "./auth.schema";
 import { register, login, getMe } from "./auth.service";
 import { sendSuccess, sendCreated } from "../../shared/utils/response";
+import { AppError } from "../../shared/errors/AppError";
 import { env } from "../../config/env";
 
 const COOKIE_OPTIONS = {
@@ -70,6 +71,23 @@ export async function meController(
   try {
     const user = await getMe(req.user!.id);
     sendSuccess(res, user);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** Returns the session JWT for WebSocket clients that cannot send httpOnly cookies cross-origin. */
+export async function realtimeTokenController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const token = req.cookies?.[env.COOKIE_NAME] as string | undefined;
+    if (!token) {
+      throw new AppError("Authentication required", 401);
+    }
+    sendSuccess(res, { token });
   } catch (err) {
     next(err);
   }

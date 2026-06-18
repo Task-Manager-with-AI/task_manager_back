@@ -41,9 +41,9 @@ export async function setupCollaboration(
     quiet: true,
     debounce: 1500,
     maxDebounce: 10000,
-    async onAuthenticate({ documentName, requestHeaders }) {
+    async onAuthenticate({ documentName, requestHeaders, token }) {
       const documentId = parseDocumentId(documentName);
-      const userId = await authenticateFromCookies(requestHeaders);
+      const userId = await resolveUserId(requestHeaders, token);
       const document = await findDocumentStateForUser(documentId, userId);
       const role = await getDocumentAccessRole(documentId, userId);
 
@@ -197,18 +197,17 @@ function parseDocumentId(documentName: string): string {
   return documentId;
 }
 
-async function authenticateFromCookies(
-  headers: Headers | Record<string, string | string[] | undefined>
+async function resolveUserId(
+  headers: Headers | Record<string, string | string[] | undefined>,
+  token?: string
 ): Promise<string> {
-  const cookieHeader = getCookieHeader(headers);
-  const cookies = parseCookie(cookieHeader);
-  const token = cookies[env.COOKIE_NAME];
+  const rawToken = token?.trim() || getCookieToken(headers);
 
-  if (!token) {
+  if (!rawToken) {
     throw new Error("Authentication required");
   }
 
-  const { payload } = await jwtVerify(token, secret);
+  const { payload } = await jwtVerify(rawToken, secret);
   const userId = payload.id as string | undefined;
 
   if (!userId) {
@@ -216,6 +215,14 @@ async function authenticateFromCookies(
   }
 
   return userId;
+}
+
+function getCookieToken(
+  headers: Headers | Record<string, string | string[] | undefined>
+): string | undefined {
+  const cookieHeader = getCookieHeader(headers);
+  const cookies = parseCookie(cookieHeader);
+  return cookies[env.COOKIE_NAME];
 }
 
 function getCookieHeader(
