@@ -10,7 +10,7 @@ import { env } from "../../config/env";
 import { prisma } from "../../prisma/client";
 import { AppError } from "../../shared/errors/AppError";
 import { syncPlainTextToCollaborationDocument } from "../../collaboration/collaboration.runtime";
-import { createYjsStateFromPlainText } from "../../collaboration/prosemirror-plain-text";
+import { createYjsStateFromPlainText, extractPlainTextFromState } from "../../collaboration/prosemirror-plain-text";
 import { enqueueDocumentSafe } from "../copilot/indexing/indexing.service";
 import { deleteBySource } from "../copilot/indexing/knowledge.repository";
 import { notifySafe } from "../notifications/notifications.service";
@@ -78,6 +78,7 @@ import {
 } from "./documents.repository";
 
 const DIAGRAM_MIME_TYPE = "image/png";
+const DIAGRAM_DOCUMENT_CONTEXT_MAX_CHARS = 12000;
 
 export async function listProjectDocuments(projectId: string) {
   return listDocumentsByProject(projectId);
@@ -124,6 +125,9 @@ export async function createGeneratedDiagramForProject(
   dto: CreateGeneratedDiagramDto
 ) {
   await ensureProjectMembership(projectId, userId);
+  let contextDocument:
+    | Awaited<ReturnType<typeof findDocumentStateForUser>>
+    | null = null;
 
   if (dto.documentId) {
     const role = await getDocumentAccessRole(dto.documentId, userId);
@@ -136,9 +140,23 @@ export async function createGeneratedDiagramForProject(
     if (document.projectId !== projectId) {
       throw new AppError("Document does not belong to the provided project", 400);
     }
+
+    if (dto.includeDocumentContext) {
+      contextDocument = await findDocumentStateForUser(dto.documentId, userId);
+      if (!contextDocument) {
+        throw new AppError("Document not found or access denied", 404);
+      }
+    }
+  } else if (dto.includeDocumentContext) {
+    throw new AppError("Document context requires a documentId", 400);
   }
 
-  const aiResult = await requestEnterpriseArchitectDiagram(dto.prompt, dto.diagram_type);
+  const generationPrompt = buildDiagramPromptWithOptionalDocumentContext(
+    dto.prompt,
+    dto.diagram_type,
+    contextDocument
+  );
+  const aiResult = await requestKrokiDiagram(generationPrompt, dto.diagram_type);
   const imageBuffer = await downloadGeneratedDiagram(aiResult.url);
   const diagramId = randomUUID();
   const fileName = buildGeneratedDiagramFileName(dto.diagram_type, dto.title);
@@ -925,12 +943,12 @@ export async function handleConversionJobCallback(
   return updated;
 }
 
-async function requestEnterpriseArchitectDiagram(
+async function requestKrokiDiagram(
   prompt: string,
   diagramType: DiagramTypeDto
 ): Promise<{ url: string }> {
   const response = await aiFetch(
-    `${env.AI_BACKEND_URL}/api/v1/ea/generate`,
+    `${env.AI_BACKEND_URL}/api/v1/diagrams/generate`,
     {
       method: "POST",
       headers: {
@@ -941,11 +959,11 @@ async function requestEnterpriseArchitectDiagram(
         diagram_type: diagramType,
       }),
     },
-    "enterprise architect diagram generation"
+    "kroki diagram generation"
   );
 
   if (!response.ok) {
-    let message = "Enterprise Architect could not generate the diagram";
+    let message = "Kroki/PlantUML could not generate the diagram";
 
     try {
       const payload = (await response.json()) as { detail?: string; message?: string };
@@ -969,7 +987,7 @@ async function requestEnterpriseArchitectDiagram(
 
   if (payload.status !== "success" || !payload.url) {
     throw new AppError(
-      payload.message?.trim() || "EA generation completed without a downloadable image",
+      payload.message?.trim() || "Kroki/PlantUML generation completed without a downloadable image",
       502
     );
   }
@@ -977,9 +995,63 @@ async function requestEnterpriseArchitectDiagram(
   return { url: payload.url };
 }
 
+function buildDiagramPromptWithOptionalDocumentContext(
+  prompt: string,
+  diagramType: DiagramTypeDto,
+  document:
+    | Awaited<ReturnType<typeof findDocumentStateForUser>>
+    | null
+) {
+  const userPrompt = prompt.trim();
+  if (!document) {
+    return userPrompt;
+  }
+
+  const documentText = extractDocumentPlainText(document.contentState).slice(
+    0,
+    DIAGRAM_DOCUMENT_CONTEXT_MAX_CHARS
+  );
+
+  if (!documentText.trim()) {
+    throw new AppError("Document context is empty", 400);
+  }
+
+  const title = document.title?.trim() || "Documento";
+  if (userPrompt) {
+    return [
+      "Instruccion del usuario:",
+      userPrompt,
+      "",
+      `Contexto del documento "${title}":`,
+      documentText,
+      "",
+      "Genera el diagrama solicitado usando la instruccion como prioridad y el contexto como soporte.",
+    ].join("\n");
+  }
+
+  return [
+    `Contexto del documento "${title}":`,
+    documentText,
+    "",
+    `Genera un diagrama ${humanizeDiagramType(diagramType)} coherente con el contenido del documento.`,
+  ].join("\n");
+}
+
+function extractDocumentPlainText(contentState: Buffer | Uint8Array | null) {
+  if (!contentState) {
+    return "";
+  }
+
+  try {
+    return extractPlainTextFromState(new Uint8Array(contentState)).trim();
+  } catch {
+    return "";
+  }
+}
+
 async function downloadGeneratedDiagram(sourceUrl: string): Promise<Buffer> {
   const resolvedUrl = new URL(sourceUrl, env.AI_BACKEND_URL).toString();
-  const response = await aiFetch(resolvedUrl, { method: "GET" }, "enterprise architect diagram download");
+  const response = await aiFetch(resolvedUrl, { method: "GET" }, "kroki diagram download");
 
   if (!response.ok) {
     throw new AppError("Generated diagram image could not be downloaded from the AI service", 502);

@@ -85,10 +85,19 @@ export const createConversionJobSchema = z.object({
 export const diagramTypeSchema = z.enum(["class", "use_case", "sequence", "activity", "component", "deployment"]);
 
 export const createGeneratedDiagramSchema = z.object({
-  prompt: z.string().trim().min(1, "Prompt is required").max(10000),
+  prompt: z.string().trim().max(10000).optional().default(""),
   diagram_type: diagramTypeSchema,
   documentId: z.string().uuid().optional(),
+  includeDocumentContext: z.boolean().optional().default(false),
   title: z.string().trim().min(1).max(180).optional(),
+}).superRefine((value, ctx) => {
+  if (!value.prompt.trim() && !value.includeDocumentContext) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Prompt is required",
+      path: ["prompt"],
+    });
+  }
 });
 
 export const conversionJobCallbackSchema = z.object({
