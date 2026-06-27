@@ -1,15 +1,40 @@
-import nodemailer from "nodemailer";
 import { env } from "../config/env";
 
-const transporter = nodemailer.createTransport({
-  host: env.SMTP_HOST,
-  port: env.SMTP_PORT,
-  secure: false, // STARTTLS on port 587
-  auth: {
-    user: env.SMTP_USER,
-    pass: env.SMTP_PASS,
-  },
-});
+interface SendEmailInput {
+  to: string;
+  subject: string;
+  html: string;
+  replyTo?: string;
+}
+
+/**
+ * Envía correo a través de la API HTTP de Resend.
+ * Usa HTTPS (puerto 443), que los hosts cloud como Render no bloquean
+ * (a diferencia de SMTP, que puede hacer timeout en 25/465/587 o ser filtrado).
+ */
+async function sendEmail({ to, subject, html, replyTo }: SendEmailInput): Promise<void> {
+  const body: Record<string, unknown> = {
+    from: env.SMTP_FROM,
+    to,
+    subject,
+    html,
+  };
+  if (replyTo) body.reply_to = replyTo;
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Resend API error ${res.status}: ${detail}`);
+  }
+}
 
 export async function sendProjectInviteEmail(
   to: string,
@@ -17,8 +42,7 @@ export async function sendProjectInviteEmail(
   inviteUrl: string,
   inviterName: string
 ): Promise<void> {
-  await transporter.sendMail({
-    from: env.SMTP_FROM,
+  await sendEmail({
     to,
     subject: `Invitación al proyecto "${projectName}" — Task Manager`,
     html: `
@@ -49,9 +73,8 @@ export async function sendSupportContactEmail(params: {
   message: string;
   category: string;
 }): Promise<void> {
-  await transporter.sendMail({
-    from: env.SMTP_FROM,
-    to: env.SMTP_USER,
+  await sendEmail({
+    to: env.SMTP_USER ?? "fsociety.soporte@gmail.com",
     replyTo: params.fromEmail,
     subject: `[Soporte][${params.category}] ${params.subject}`,
     html: `
@@ -70,8 +93,7 @@ export async function sendSupportContactEmail(params: {
 }
 
 export async function sendVerificationEmail(to: string, code: string): Promise<void> {
-  await transporter.sendMail({
-    from: env.SMTP_FROM,
+  await sendEmail({
     to,
     subject: "Verifica tu correo electrónico — Task Manager",
     html: `
