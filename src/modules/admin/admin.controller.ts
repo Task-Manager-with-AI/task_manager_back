@@ -54,7 +54,7 @@ export async function listUsersController(req: Request, res: Response, next: Nex
 export async function patchUserController(req: Request, res: Response, next: NextFunction) {
   try {
     const body = patchUserBodySchema.parse(req.body);
-    const data = await svc.patchUser(req.params.id, body, req.user!.id);
+    const data = await svc.patchUser(req.params["id"] as string, body, req.user!.id);
     sendSuccess(res, data);
   } catch (err) {
     next(err);
