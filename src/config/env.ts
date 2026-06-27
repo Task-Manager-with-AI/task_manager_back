@@ -55,7 +55,7 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
-  SMTP_FROM: z.string().default("Task Manager <onboarding@resend.email>"),
+  SMTP_FROM: z.string().default("Task Manager <onboarding@resend.dev>"),
   RESEND_API_KEY: z.string().min(1, "RESEND_API_KEY is required"),
   // ── Google OAuth ────────────────────────────────────────────────────────────
   GOOGLE_CLIENT_ID: z.string().min(1, "GOOGLE_CLIENT_ID is required"),
