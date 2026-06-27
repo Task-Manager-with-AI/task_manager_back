@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { setDefaultResultOrder } from "dns";
 import { createServer } from "http";
 import { app } from "./app";
 import { prisma } from "./prisma/client";
@@ -7,6 +8,10 @@ import { setupSignaling } from "./signaling/signaling.server";
 import { setupCollaboration } from "./collaboration/collaboration.server";
 import { startIndexingWorker } from "./modules/copilot/indexing/indexing.worker";
 import { startNotificationJobs } from "./modules/notifications/notifications.jobs";
+
+// Render (y la mayoría de hosts cloud) solo tienen salida IPv4. Sin esto,
+// smtp.gmail.com resuelve a IPv6 y nodemailer falla con ENETUNREACH al conectar.
+setDefaultResultOrder("ipv4first");
 
 async function bootstrap() {
   await prisma.$connect();
