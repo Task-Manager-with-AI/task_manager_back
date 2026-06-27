@@ -50,12 +50,13 @@ const envSchema = z.object({
   NOTIF_JOBS_ENABLED: z.coerce.boolean().default(true),
   /** Max Prisma pool size — keep low when using Supabase pooler (default 15). */
   DATABASE_CONNECTION_LIMIT: z.coerce.number().int().min(1).max(50).default(5),
-  // ── Email verification ──────────────────────────────────────────────────────
-  SMTP_HOST: z.string().default("smtp.gmail.com"),
-  SMTP_PORT: z.coerce.number().default(587),
-  SMTP_USER: z.string().min(1, "SMTP_USER is required"),
-  SMTP_PASS: z.string().min(1, "SMTP_PASS is required"),
-  SMTP_FROM: z.string().default("Task Manager <fsociety.soporte@gmail.com>"),
+  // ── Email (vía API HTTP de Resend; SMTP ya no se usa) ──────────────────────
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().default("Task Manager <onboarding@resend.email>"),
+  RESEND_API_KEY: z.string().min(1, "RESEND_API_KEY is required"),
   // ── Google OAuth ────────────────────────────────────────────────────────────
   GOOGLE_CLIENT_ID: z.string().min(1, "GOOGLE_CLIENT_ID is required"),
 });
