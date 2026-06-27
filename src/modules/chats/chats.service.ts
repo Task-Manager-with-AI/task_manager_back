@@ -128,10 +128,24 @@ async function participantIds(chatId: string) {
   return participants.map((p) => p.userId);
 }
 
+// ── Super-admin id cache (for support chat naming) ───────────────────────
+let _superAdminId: string | null | undefined;
+
+async function getSuperAdminId(): Promise<string | null> {
+  if (_superAdminId !== undefined) return _superAdminId;
+  const sa = await prisma.user.findFirst({
+    where: { role: { name: "SUPER_ADMIN" } },
+    select: { id: true },
+  });
+  _superAdminId = sa?.id ?? null;
+  return _superAdminId;
+}
+
 // ── Chat listing & detail ─────────────────────────────────────────────────
 
 export async function listChats(userId: string) {
   const chats = await repo.findUserChats(userId);
+  const superAdminId = await getSuperAdminId();
   return Promise.all(
     chats.map(async (chat) => {
       const self = chat.participants.find((p) => p.userId === userId);
@@ -146,13 +160,17 @@ export async function listChats(userId: string) {
           ? chat.participants.find((p) => p.userId !== userId)
           : undefined;
 
+      const chatName =
+        chat.type === "PROJECT"
+          ? chat.project?.name ?? "Proyecto"
+          : other?.userId === superAdminId
+          ? "Soporte · Task Manager"
+          : other?.user.name ?? "Usuario";
+
       return {
         id: chat.id,
         type: chat.type,
-        name:
-          chat.type === "PROJECT"
-            ? chat.project?.name ?? "Proyecto"
-            : other?.user.name ?? "Usuario",
+        name: chatName,
         projectId: chat.projectId ?? undefined,
         participants: chat.participants.map((p) => ({
           userId: p.userId,
@@ -422,6 +440,26 @@ export async function getOrCreateDirectChat(userId: string, otherUserId: string)
 
   const chat = await repo.createDirectChat(userId, otherUserId);
   return getChat(chat.id, userId);
+}
+
+// ── Support chat auto-creation ────────────────────────────────────────────
+
+export async function ensureSupportChat(userId: string): Promise<void> {
+  const superAdmin = await prisma.user.findFirst({
+    where: { role: { name: "SUPER_ADMIN" }, isActive: true },
+    select: { id: true },
+  });
+  if (!superAdmin || superAdmin.id === userId) return;
+
+  const existing = await repo.findDirectChatBetween(userId, superAdmin.id);
+  if (existing) {
+    await repo.reactivateDirectParticipants(existing.id, userId, superAdmin.id);
+    return;
+  }
+
+  await repo.createDirectChat(userId, superAdmin.id);
+  // Invalidate the cached super admin id so rename logic works immediately
+  _superAdminId = superAdmin.id;
 }
 
 export async function getProjectChatId(projectId: string) {

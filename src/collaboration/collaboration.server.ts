@@ -42,16 +42,29 @@ export async function setupCollaboration(
     debounce: 1500,
     maxDebounce: 10000,
     async onAuthenticate({ documentName, requestHeaders, token }) {
-      const documentId = parseDocumentId(documentName);
-      const userId = await resolveUserId(requestHeaders, token);
-      const document = await findDocumentStateForUser(documentId, userId);
-      const role = await getDocumentAccessRole(documentId, userId);
+      let resolvedDocumentId: string | undefined;
+      let resolvedUserId: string | undefined;
+      try {
+        resolvedDocumentId = parseDocumentId(documentName);
+        resolvedUserId = await resolveUserId(requestHeaders, token);
 
-      if (!document) {
-        throw new Error("Document not found or access denied");
+        const document = await findDocumentStateForUser(resolvedDocumentId, resolvedUserId);
+        if (!document) {
+          throw new Error("Document not found or access denied");
+        }
+
+        const role = await getDocumentAccessRole(resolvedDocumentId, resolvedUserId);
+        return { userId: resolvedUserId, documentId: resolvedDocumentId, role };
+      } catch (error) {
+        console.error("[collaboration:auth] Authentication failed:", {
+          documentName,
+          documentId: resolvedDocumentId,
+          userId: resolvedUserId,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+        throw error;
       }
-
-      return { userId, documentId, role };
     },
     async onLoadDocument({ context, document }) {
       if (!context.documentId || !context.userId) {

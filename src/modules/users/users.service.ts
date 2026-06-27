@@ -1,5 +1,5 @@
 import { AppError } from "../../shared/errors/AppError";
-import { findById, updateById, findAll } from "./users.repository";
+import { findById, updateById, findUsersSharedWithMe } from "./users.repository";
 import type { UpdateUserDto } from "./users.schema";
 
 export async function getMe(userId: string) {
@@ -14,6 +14,6 @@ export async function updateMe(userId: string, dto: UpdateUserDto) {
   return updateById(userId, dto);
 }
 
-export async function listUsers() {
-  return findAll();
+export async function listUsers(requesterId: string) {
+  return findUsersSharedWithMe(requesterId);
 }

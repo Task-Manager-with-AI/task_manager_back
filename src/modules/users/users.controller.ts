@@ -31,12 +31,12 @@ export async function updateMeController(
 }
 
 export async function listUsersController(
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction
 ) {
   try {
-    const users = await listUsers();
+    const users = await listUsers(req.user!.id);
     sendSuccess(res, users);
   } catch (err) {
     next(err);
