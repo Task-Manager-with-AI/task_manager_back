@@ -68,12 +68,22 @@ export function buildNotification(
   d: NotifyData
 ): BuiltNotification {
   const category = CATEGORY[type];
-  const taskUrl = d.projectId && d.taskId ? `/projects/${d.projectId}?task=${d.taskId}` : d.url;
-  const meetingUrl = d.meetingId ? `/meetings/${d.meetingId}` : d.url;
-  const docUrl =
-    d.projectId && d.documentId
-      ? `/projects/${d.projectId}/documents/${d.documentId}`
-      : d.url;
+  const taskUrl = d.projectId && d.taskId ? `/projects/${d.projectId}` : d.url;
+  const meetingUrl =
+    d.projectId && d.meetingId
+      ? `/projects/${d.projectId}/meetings/${d.meetingId}`
+      : d.meetingId
+        ? `/meetings/${d.meetingId}`
+        : d.url;
+  const meetingRoomUrl =
+    d.projectId && d.meetingId
+      ? `/projects/${d.projectId}/meetings/${d.meetingId}/room`
+      : meetingUrl;
+  const minutesUrl =
+    d.projectId && d.meetingId
+      ? `/projects/${d.projectId}/meetings/${d.meetingId}/minutes`
+      : meetingUrl;
+  const docUrl = d.documentId ? `/documents/${d.documentId}` : d.url;
   const chatUrl = d.chatId ? `/chats?chatId=${d.chatId}` : d.url;
   const projectUrl = d.projectId ? `/projects/${d.projectId}` : d.url;
 
@@ -87,11 +97,11 @@ export function buildNotification(
     case "MEETING_SCHEDULED":
       return { category, title: "Nueva reunión programada", body: `${actor(d)} programó «${d.meetingTitle ?? "una reunión"}».`, url: meetingUrl };
     case "MEETING_STARTED":
-      return { category, title: "Reunión iniciada", body: `${actor(d)} inició «${d.meetingTitle ?? "una reunión"}». Únete ahora.`, url: d.meetingId ? `/meetings/${d.meetingId}` : d.url };
+      return { category, title: "Reunión iniciada", body: `${actor(d)} inició «${d.meetingTitle ?? "una reunión"}». Únete ahora.`, url: meetingRoomUrl };
     case "MEETING_REMINDER":
       return { category, title: "Reunión próxima", body: `«${d.meetingTitle ?? "Una reunión"}» comienza pronto.`, url: meetingUrl };
     case "MEETING_MINUTES_READY":
-      return { category, title: "Minuta lista", body: `La minuta de «${d.meetingTitle ?? "la reunión"}» ya está disponible.`, url: meetingUrl };
+      return { category, title: "Minuta lista", body: `La minuta de «${d.meetingTitle ?? "la reunión"}» ya está disponible.`, url: minutesUrl };
     case "TASK_ASSIGNED":
       return { category, title: "Nueva tarea asignada", body: `${actor(d)} te asignó «${d.taskTitle ?? "una tarea"}».`, url: taskUrl };
     case "TASK_STATUS_CHANGED":
@@ -115,11 +125,11 @@ export function buildNotification(
     case "CHAT_DIRECT_MESSAGE":
       return { category, title: `Mensaje de ${actor(d)}`, body: truncate(String(d["preview"] ?? ""), 80), url: chatUrl, groupKey: `chat:${d.chatId}` };
     case "TASK_SUGGESTION_CREATED":
-      return { category, title: "Sugerencias de tareas", body: `La IA generó tareas a partir de «${d.meetingTitle ?? "una reunión"}».`, url: meetingUrl };
+      return { category, title: "Sugerencias de tareas", body: `La IA generó tareas a partir de «${d.meetingTitle ?? "una reunión"}».`, url: minutesUrl };
     case "SUGGESTION_RESOLVED":
       return { category, title: "Sugerencia resuelta", body: `${actor(d)} resolvió una sugerencia de tarea.`, url: projectUrl };
     case "MENTION_IN_MINUTE":
-      return { category, title: "Apareces en una minuta", body: `Se te menciona en la minuta de «${d.meetingTitle ?? "una reunión"}».`, url: meetingUrl };
+      return { category, title: "Apareces en una minuta", body: `Se te menciona en la minuta de «${d.meetingTitle ?? "una reunión"}».`, url: minutesUrl };
     case "COPILOT_DIGEST":
       return { category, title: "Resumen del proyecto", body: `Tu resumen de «${d.projectName ?? "el proyecto"}» está listo.`, url: d.projectId ? `/projects/${d.projectId}/copilot` : d.url };
     default:

@@ -4,7 +4,7 @@ import { seedDashboardDemo } from "./seeds/dashboard-demo.seed";
 const prisma = new PrismaClient();
 
 async function main() {
-  const roles: RoleName[] = [RoleName.ADMIN, RoleName.MEMBER, RoleName.GUEST];
+  const roles: RoleName[] = [RoleName.SUPER_ADMIN, RoleName.ADMIN, RoleName.MEMBER, RoleName.GUEST];
 
   for (const name of roles) {
     await prisma.role.upsert({
@@ -14,7 +14,7 @@ async function main() {
     });
   }
 
-  console.log("Seed complete: 3 roles created.");
+  console.log("Seed complete: 4 roles created.");
 
   await seedDashboardDemo(prisma);
 }
