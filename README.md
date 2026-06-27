@@ -97,7 +97,7 @@ Importante:
 - Por defecto se usa la base de datos `agile_ai_db`.
 - `JWT_SECRET` debe tener al menos 32 caracteres.
 - `AI_BACKEND_URL` apunta al backend de IA. Para levantar solo el backend principal, puede quedarse como `http://localhost:8000`, aunque el servicio de IA aun no este encendido.
-- `COLLABORATION_PORT` levanta Hocuspocus/Yjs para documentos colaborativos. En local se usa `ws://localhost:4001/collaboration`.
+- `COLLABORATION_PORT` (opcional, legado) — la colaboración comparte `BACKEND_PORT` en la ruta `/collaboration`. En local: `ws://localhost:4000/collaboration`.
 
 ### Almacenamiento de audios en S3
 
@@ -131,13 +131,14 @@ No subas credenciales AWS a Git. Mantenlas solo en `.env`.
 
 ### Documentos colaborativos
 
-El backend Node tambien levanta el servidor colaborativo Hocuspocus/Yjs en el mismo proceso, usando el puerto configurado en `COLLABORATION_PORT`.
+El backend Node monta Hocuspocus/Yjs en el **mismo puerto HTTP** (`BACKEND_PORT`) bajo la ruta `/collaboration`.
 
 En local:
 
 ```text
 API REST: http://localhost:4000/api/v1
-WebSocket documentos: ws://localhost:4001/collaboration
+WebSocket documentos: ws://localhost:4000/collaboration
+Socket.IO: ws://localhost:4000/socket.io
 Frontend: http://localhost:3000
 ```
 
@@ -145,7 +146,7 @@ El frontend debe tener:
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
-NEXT_PUBLIC_COLLABORATION_URL=ws://localhost:4001/collaboration
+NEXT_PUBLIC_COLLABORATION_URL=ws://localhost:4000/collaboration
 ```
 
 Validacion manual recomendada:

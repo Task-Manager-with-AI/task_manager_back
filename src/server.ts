@@ -14,7 +14,7 @@ async function bootstrap() {
 
   const httpServer = createServer(app);
   setupSignaling(httpServer);
-  await setupCollaboration();
+  await setupCollaboration(httpServer);
   startIndexingWorker();
   startNotificationJobs();
 
@@ -22,6 +22,7 @@ async function bootstrap() {
     console.log(`🚀 Server running on http://localhost:${env.BACKEND_PORT}`);
     console.log(`📄 Swagger docs at http://localhost:${env.BACKEND_PORT}/api/docs`);
     console.log(`📡 Socket.IO signaling attached at /socket.io`);
+    console.log(`📝 Collaboration WebSocket attached at /collaboration`);
   });
 }
 

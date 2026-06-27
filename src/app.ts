@@ -18,6 +18,10 @@ import { chatsRouter } from "./modules/chats/chats.routes";
 import { documentsRouter } from "./modules/documents/documents.routes";
 import { copilotRouter } from "./modules/copilot/copilot.routes";
 import { notificationsRouter } from "./modules/notifications/notifications.routes";
+import { invitesRouter } from "./modules/invites/invites.routes";
+import { adminRouter } from "./modules/admin/admin.routes";
+import { feedbackRouter } from "./modules/feedback/feedback.routes";
+import { supportRouter } from "./modules/support/support.routes";
 import path from "path";
 import { env } from "./config/env";
 
@@ -48,6 +52,10 @@ app.use("/api/v1", chatsRouter);
 app.use("/api/v1", documentsRouter);
 app.use("/api/v1", copilotRouter);
 app.use("/api/v1", notificationsRouter);
+app.use("/api/v1", invitesRouter);
+app.use("/api/v1/admin", adminRouter);
+app.use("/api/v1", feedbackRouter);
+app.use("/api/v1", supportRouter);
 
 // Static audio uploads (only for development; behind auth in real prod)
 app.use(

@@ -43,11 +43,21 @@ const envSchema = z.object({
   /** VAPID keys for Web Push. If unset, push is disabled (in-app still works). */
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
-  VAPID_SUBJECT: z.string().default("mailto:soporte@taskmanager.app"),
+  VAPID_SUBJECT: z.string().default("mailto:fsociety.soporte@gmail.com"),
   /** Minutes before a scheduled meeting to send a reminder. */
   NOTIF_MEETING_REMINDER_MIN: z.coerce.number().int().min(1).default(15),
   /** Enable the background jobs (meeting reminders + task deadlines). */
   NOTIF_JOBS_ENABLED: z.coerce.boolean().default(true),
+  /** Max Prisma pool size — keep low when using Supabase pooler (default 15). */
+  DATABASE_CONNECTION_LIMIT: z.coerce.number().int().min(1).max(50).default(5),
+  // ── Email verification ──────────────────────────────────────────────────────
+  SMTP_HOST: z.string().default("smtp.gmail.com"),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_USER: z.string().min(1, "SMTP_USER is required"),
+  SMTP_PASS: z.string().min(1, "SMTP_PASS is required"),
+  SMTP_FROM: z.string().default("Task Manager <fsociety.soporte@gmail.com>"),
+  // ── Google OAuth ────────────────────────────────────────────────────────────
+  GOOGLE_CLIENT_ID: z.string().min(1, "GOOGLE_CLIENT_ID is required"),
 });
 
 const parsed = envSchema.safeParse(process.env);

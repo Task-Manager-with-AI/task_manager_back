@@ -22,3 +22,21 @@ export async function updateById(id: string, data: { name?: string }) {
 export async function findAll() {
   return prisma.user.findMany({ where: { isActive: true }, select: safeSelect });
 }
+
+export async function findUsersSharedWithMe(requesterId: string) {
+  const myMemberships = await prisma.projectMember.findMany({
+    where: { userId: requesterId, isActive: true },
+    select: { projectId: true },
+  });
+  const projectIds = myMemberships.map((m) => m.projectId);
+
+  return prisma.user.findMany({
+    where: {
+      isActive: true,
+      id: { not: requesterId },
+      memberships: { some: { projectId: { in: projectIds }, isActive: true } },
+    },
+    select: safeSelect,
+    orderBy: { name: "asc" },
+  });
+}

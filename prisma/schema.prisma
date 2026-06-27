@@ -8,6 +8,7 @@ datasource db {
 }
 
 enum RoleName {
+  SUPER_ADMIN
   ADMIN
   MEMBER
   GUEST
@@ -106,7 +107,11 @@ model User {
   id                          String                  @id @default(uuid())
   name                        String
   email                       String                  @unique
-  passwordHash                String
+  passwordHash                String?
+  googleId                    String?                 @unique
+  emailVerified               Boolean                 @default(false)
+  emailVerificationCode       String?
+  emailVerificationExpires    DateTime?
   roleId                      Int
   isActive                    Boolean                 @default(true)
   createdAt                   DateTime                @default(now())
@@ -133,11 +138,14 @@ model User {
   createdDocumentVersions     DocumentVersion[]       @relation("DocumentVersionCreator")
   documentAuditLogs           DocumentAuditLog[]      @relation("DocumentAuditActor")
   documentConversionJobs      DocumentConversionJob[] @relation("DocumentConversionCreator")
+  generatedDiagrams           GeneratedDiagram[]      @relation("GeneratedDiagramCreator")
   conversationThreads         ConversationThread[]
   notifications               Notification[]          @relation("NotificationRecipient")
   notificationsActed          Notification[]          @relation("NotificationActor")
   notificationPrefs           NotificationPreference[]
   pushSubscriptions           PushSubscription[]
+  projectInvitesCreated       ProjectInvite[]          @relation("InviteCreator")
+  feedbacks                   AppFeedback[]            @relation("UserFeedback")
 }
 
 model Project {
@@ -156,8 +164,25 @@ model Project {
   sprints       Sprint[]
   chat          Chat?
   documents     Document[]
+  diagrams      GeneratedDiagram[]
   knowledgeChunks     KnowledgeChunk[]
   conversationThreads ConversationThread[]
+  invites       ProjectInvite[]
+}
+
+model ProjectInvite {
+  id          String    @id @default(uuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id])
+  createdById String
+  createdBy   User      @relation("InviteCreator", fields: [createdById], references: [id])
+  email       String?
+  token       String    @unique @default(uuid())
+  memberRole  String    @default("MEMBER")
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  acceptedById String?
+  createdAt   DateTime  @default(now())
 }
 
 model KanbanColumn {
@@ -431,8 +456,30 @@ model Document {
   versions       DocumentVersion[]
   auditLogs      DocumentAuditLog[]
   conversionJobs DocumentConversionJob[]
+  diagrams       GeneratedDiagram[]
 
   @@index([projectId])
+  @@index([createdById])
+}
+
+model GeneratedDiagram {
+  id          String   @id @default(uuid())
+  projectId   String
+  documentId  String?
+  title       String
+  diagramType String
+  prompt      String?
+  storageKey  String
+  publicUrl   String
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document    Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  createdBy   User     @relation("GeneratedDiagramCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([projectId, diagramType, createdAt])
+  @@index([documentId, createdAt])
   @@index([createdById])
 }
 
@@ -751,6 +798,22 @@ model NotificationPreference {
   user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, category])
+}
+
+model AppFeedback {
+  id         String   @id @default(uuid())
+  userId     String
+  rating     Int
+  comment    String?
+  page       String?
+  appVersion String?
+  createdAt  DateTime @default(now())
+
+  user User @relation("UserFeedback", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([rating])
+  @@index([createdAt])
 }
 
 model PushSubscription {

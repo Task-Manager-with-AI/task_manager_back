@@ -1,6 +1,6 @@
 import { env } from "../../config/env";
 import { prisma } from "../../prisma/client";
-import { notifySafe } from "./notifications.service";
+import { notify } from "./notifications.service";
 
 // In-memory dedupe so a job tick doesn't re-notify the same entity repeatedly.
 // Resets on restart (acceptable) and is pruned daily.
@@ -37,11 +37,15 @@ async function runMeetingReminders() {
   for (const m of meetings) {
     if (remindedMeetings.has(m.id)) continue;
     remindedMeetings.add(m.id);
-    notifySafe({
-      type: "MEETING_REMINDER",
-      recipientIds: m.participants.map((p) => p.userId),
-      data: { meetingId: m.id, meetingTitle: m.title, projectId: m.projectId },
-    });
+    try {
+      await notify({
+        type: "MEETING_REMINDER",
+        recipientIds: m.participants.map((p) => p.userId),
+        data: { meetingId: m.id, meetingTitle: m.title, projectId: m.projectId },
+      });
+    } catch (err) {
+      console.error("[notifications] MEETING_REMINDER failed:", err);
+    }
   }
 }
 
@@ -61,11 +65,15 @@ async function runTaskDeadlines() {
   for (const t of dueSoon) {
     if (notifiedDueSoon.has(t.id)) continue;
     notifiedDueSoon.add(t.id);
-    notifySafe({
-      type: "TASK_DUE_SOON",
-      recipientIds: [t.responsibleId as string],
-      data: { taskId: t.id, taskTitle: t.title, projectId: t.projectId },
-    });
+    try {
+      await notify({
+        type: "TASK_DUE_SOON",
+        recipientIds: [t.responsibleId as string],
+        data: { taskId: t.id, taskTitle: t.title, projectId: t.projectId },
+      });
+    } catch (err) {
+      console.error("[notifications] TASK_DUE_SOON failed:", err);
+    }
   }
 
   const overdue = await prisma.task.findMany({
@@ -79,11 +87,15 @@ async function runTaskDeadlines() {
   for (const t of overdue) {
     if (notifiedOverdue.has(t.id)) continue;
     notifiedOverdue.add(t.id);
-    notifySafe({
-      type: "TASK_OVERDUE",
-      recipientIds: [t.responsibleId as string],
-      data: { taskId: t.id, taskTitle: t.title, projectId: t.projectId },
-    });
+    try {
+      await notify({
+        type: "TASK_OVERDUE",
+        recipientIds: [t.responsibleId as string],
+        data: { taskId: t.id, taskTitle: t.title, projectId: t.projectId },
+      });
+    } catch (err) {
+      console.error("[notifications] TASK_OVERDUE failed:", err);
+    }
   }
 }
 

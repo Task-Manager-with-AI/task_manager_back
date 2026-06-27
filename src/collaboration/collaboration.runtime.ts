@@ -1,5 +1,5 @@
 import { DocumentPermissionRole } from "@prisma/client";
-import type { Server } from "@hocuspocus/server";
+import type { Hocuspocus } from "@hocuspocus/server";
 import { applyPlainTextToProseMirrorFragment } from "./prosemirror-plain-text";
 
 type CollaborationContext = {
@@ -8,22 +8,26 @@ type CollaborationContext = {
   role?: DocumentPermissionRole;
 };
 
-let collaborationServer: Server<CollaborationContext> | null = null;
+export type CollaborationRuntime = {
+  hocuspocus: Hocuspocus<CollaborationContext>;
+};
 
-export function registerCollaborationServer(server: Server<CollaborationContext>) {
-  collaborationServer = server;
+let collaborationRuntime: CollaborationRuntime | null = null;
+
+export function registerCollaborationServer(runtime: CollaborationRuntime) {
+  collaborationRuntime = runtime;
 }
 
 export function syncPlainTextToActiveDocument(
   documentId: string,
   plainText: string
 ): boolean {
-  if (!collaborationServer) {
+  if (!collaborationRuntime) {
     return false;
   }
 
   const roomName = `document:${documentId}`;
-  const liveDocument = collaborationServer.hocuspocus.documents.get(roomName);
+  const liveDocument = collaborationRuntime.hocuspocus.documents.get(roomName);
 
   if (!liveDocument) {
     return false;
@@ -51,7 +55,7 @@ export async function syncPlainTextToCollaborationDocument(
   documentId: string,
   plainText: string
 ): Promise<boolean> {
-  if (!collaborationServer) {
+  if (!collaborationRuntime) {
     return false;
   }
 
@@ -60,7 +64,7 @@ export async function syncPlainTextToCollaborationDocument(
   }
 
   const roomName = `document:${documentId}`;
-  const direct = await collaborationServer.hocuspocus.openDirectConnection(roomName, {
+  const direct = await collaborationRuntime.hocuspocus.openDirectConnection(roomName, {
     userId: "system",
     documentId,
     role: DocumentPermissionRole.EDITOR,

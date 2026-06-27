@@ -1,7 +1,21 @@
 import { Request, Response, NextFunction } from "express";
-import { registerSchema, loginSchema } from "./auth.schema";
-import { register, login, getMe } from "./auth.service";
+import {
+  registerSchema,
+  loginSchema,
+  verifyEmailSchema,
+  resendVerificationSchema,
+  googleAuthSchema,
+} from "./auth.schema";
+import {
+  register,
+  login,
+  getMe,
+  verifyEmail,
+  resendVerificationCode,
+  googleAuth,
+} from "./auth.service";
 import { sendSuccess, sendCreated } from "../../shared/utils/response";
+import { AppError } from "../../shared/errors/AppError";
 import { env } from "../../config/env";
 
 const COOKIE_OPTIONS = {
@@ -12,7 +26,6 @@ const COOKIE_OPTIONS = {
   maxAge: 86400000,
 };
 
-/** Opciones para borrar la cookie: sin maxAge (Express depreca maxAge en clearCookie). Deben coincidir path/httpOnly/secure/sameSite con COOKIE_OPTIONS. */
 const CLEAR_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
@@ -28,7 +41,36 @@ export async function registerController(
   try {
     const dto = registerSchema.parse(req.body);
     const user = await register(dto);
-    sendCreated(res, user, "Account created successfully");
+    sendCreated(res, user, "Account created. Please verify your email.");
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function verifyEmailController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const dto = verifyEmailSchema.parse(req.body);
+    const { token, user } = await verifyEmail(dto);
+    res.cookie(env.COOKIE_NAME, token, COOKIE_OPTIONS);
+    sendSuccess(res, user, "Email verified successfully");
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function resendVerificationController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const dto = resendVerificationSchema.parse(req.body);
+    await resendVerificationCode(dto);
+    sendSuccess(res, null, "Verification code sent");
   } catch (err) {
     next(err);
   }
@@ -44,6 +86,21 @@ export async function loginController(
     const { token, user } = await login(dto);
     res.cookie(env.COOKIE_NAME, token, COOKIE_OPTIONS);
     sendSuccess(res, user, "Logged in successfully");
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function googleAuthController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const dto = googleAuthSchema.parse(req.body);
+    const { token, user } = await googleAuth(dto);
+    res.cookie(env.COOKIE_NAME, token, COOKIE_OPTIONS);
+    sendSuccess(res, user, "Logged in with Google");
   } catch (err) {
     next(err);
   }
@@ -70,6 +127,20 @@ export async function meController(
   try {
     const user = await getMe(req.user!.id);
     sendSuccess(res, user);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function realtimeTokenController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const token = req.cookies?.[env.COOKIE_NAME] as string | undefined;
+    if (!token) throw new AppError("Authentication required", 401);
+    sendSuccess(res, { token });
   } catch (err) {
     next(err);
   }

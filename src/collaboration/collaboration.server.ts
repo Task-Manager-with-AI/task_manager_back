@@ -1,11 +1,20 @@
-﻿import { DocumentPermissionRole } from "@prisma/client";
-import { Server } from "@hocuspocus/server";
+﻿import type { Server as HttpServer } from "http";
+import { parse as parseUrl } from "url";
+import { DocumentPermissionRole } from "@prisma/client";
+import {
+  Hocuspocus,
+  type WebSocketLike,
+} from "@hocuspocus/server";
+import crossws from "crossws/adapters/node";
 import { jwtVerify } from "jose";
 import { parse as parseCookie } from "cookie";
 import * as Y from "yjs";
 import { env } from "../config/env";
 import { prisma } from "../prisma/client";
-import { registerCollaborationServer } from "./collaboration.runtime";
+import {
+  registerCollaborationServer,
+  type CollaborationRuntime,
+} from "./collaboration.runtime";
 import {
   createDocumentVersion,
   findDocumentStateForUser,
@@ -23,25 +32,39 @@ type CollaborationContext = {
 const secret = new TextEncoder().encode(env.JWT_SECRET);
 const lastSnapshotAt = new Map<string, number>();
 
-export async function setupCollaboration() {
-  const port = env.COLLABORATION_PORT ?? env.BACKEND_PORT + 1;
+export const COLLABORATION_WS_PATH = "/collaboration";
 
-  const server = new Server<CollaborationContext>({
-    port,
+export async function setupCollaboration(
+  httpServer: HttpServer
+): Promise<CollaborationRuntime> {
+  const hocuspocus = new Hocuspocus<CollaborationContext>({
     quiet: true,
     debounce: 1500,
     maxDebounce: 10000,
-    async onAuthenticate({ documentName, requestHeaders }) {
-      const documentId = parseDocumentId(documentName);
-      const userId = await authenticateFromCookies(requestHeaders);
-      const document = await findDocumentStateForUser(documentId, userId);
-      const role = await getDocumentAccessRole(documentId, userId);
+    async onAuthenticate({ documentName, requestHeaders, token }) {
+      let resolvedDocumentId: string | undefined;
+      let resolvedUserId: string | undefined;
+      try {
+        resolvedDocumentId = parseDocumentId(documentName);
+        resolvedUserId = await resolveUserId(requestHeaders, token);
 
-      if (!document) {
-        throw new Error("Document not found or access denied");
+        const document = await findDocumentStateForUser(resolvedDocumentId, resolvedUserId);
+        if (!document) {
+          throw new Error("Document not found or access denied");
+        }
+
+        const role = await getDocumentAccessRole(resolvedDocumentId, resolvedUserId);
+        return { userId: resolvedUserId, documentId: resolvedDocumentId, role };
+      } catch (error) {
+        console.error("[collaboration:auth] Authentication failed:", {
+          documentName,
+          documentId: resolvedDocumentId,
+          userId: resolvedUserId,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+        throw error;
       }
-
-      return { userId, documentId, role };
     },
     async onLoadDocument({ context, document }) {
       if (!context.documentId || !context.userId) {
@@ -112,11 +135,71 @@ export async function setupCollaboration() {
     },
   });
 
-  await server.listen(port);
-  registerCollaborationServer(server);
-  console.log(`Collaboration server listening on ws://localhost:${port}/collaboration`);
+  const crosswsInstance = crossws({
+    hooks: {
+      open: (peer) => {
+        const clientConnection = hocuspocus.handleConnection(
+          peer.websocket as unknown as WebSocketLike,
+          peer.request as Request
+        );
+        (peer as { _hocuspocus?: unknown })._hocuspocus = clientConnection;
+      },
+      message: (peer, message) => {
+        (
+          peer as {
+            _hocuspocus?: { handleMessage: (payload: Uint8Array) => void };
+          }
+        )._hocuspocus?.handleMessage(message.uint8Array());
+      },
+      close: (peer, event) => {
+        (
+          peer as {
+            _hocuspocus?: {
+              handleClose: (payload: { code: number; reason: string }) => void;
+            };
+          }
+        )._hocuspocus?.handleClose({
+          code: event.code ?? 1000,
+          reason: event.reason ?? "",
+        });
+      },
+      error: (_peer, error) => {
+        console.error("Collaboration WebSocket error:", error);
+      },
+    },
+  });
 
-  return server;
+  httpServer.on("upgrade", (request, socket, head) => {
+    const pathname = parseUrl(request.url ?? "").pathname ?? "";
+    if (pathname !== COLLABORATION_WS_PATH) {
+      return;
+    }
+
+    void (async () => {
+      try {
+        await hocuspocus.hooks("onUpgrade", {
+          request,
+          socket,
+          head,
+          instance: hocuspocus,
+        });
+        crosswsInstance.handleUpgrade(request, socket, head);
+      } catch (error) {
+        if (error) {
+          console.error("Collaboration upgrade failed:", error);
+        }
+        socket.destroy();
+      }
+    })();
+  });
+
+  const runtime: CollaborationRuntime = { hocuspocus };
+  registerCollaborationServer(runtime);
+  console.log(
+    `Collaboration WebSocket attached at ${COLLABORATION_WS_PATH} (port ${env.BACKEND_PORT})`
+  );
+
+  return runtime;
 }
 
 function parseDocumentId(documentName: string): string {
@@ -127,18 +210,17 @@ function parseDocumentId(documentName: string): string {
   return documentId;
 }
 
-async function authenticateFromCookies(
-  headers: Headers | Record<string, string | string[] | undefined>
+async function resolveUserId(
+  headers: Headers | Record<string, string | string[] | undefined>,
+  token?: string
 ): Promise<string> {
-  const cookieHeader = getCookieHeader(headers);
-  const cookies = parseCookie(cookieHeader);
-  const token = cookies[env.COOKIE_NAME];
+  const rawToken = token?.trim() || getCookieToken(headers);
 
-  if (!token) {
+  if (!rawToken) {
     throw new Error("Authentication required");
   }
 
-  const { payload } = await jwtVerify(token, secret);
+  const { payload } = await jwtVerify(rawToken, secret);
   const userId = payload.id as string | undefined;
 
   if (!userId) {
@@ -146,6 +228,14 @@ async function authenticateFromCookies(
   }
 
   return userId;
+}
+
+function getCookieToken(
+  headers: Headers | Record<string, string | string[] | undefined>
+): string | undefined {
+  const cookieHeader = getCookieHeader(headers);
+  const cookies = parseCookie(cookieHeader);
+  return cookies[env.COOKIE_NAME];
 }
 
 function getCookieHeader(
@@ -162,4 +252,3 @@ function getCookieHeader(
 
   return raw ?? "";
 }
-
