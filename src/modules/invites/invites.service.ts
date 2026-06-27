@@ -1,7 +1,6 @@
 import { prisma } from "../../prisma/client";
 import { AppError } from "../../shared/errors/AppError";
 import { env } from "../../config/env";
-import { sendProjectInviteEmail } from "../../shared/email.service";
 import { addMember } from "../projects/projects.repository";
 import {
   createInvite,
@@ -53,11 +52,6 @@ export async function sendInviteByEmail(
 
   await assertAdminOfProject(projectId, createdById);
 
-  const inviter = await prisma.user.findUnique({
-    where: { id: createdById },
-    select: { name: true },
-  });
-
   const invite = await createInvite({
     projectId,
     createdById,
@@ -67,14 +61,16 @@ export async function sendInviteByEmail(
   });
 
   const inviteUrl = `${env.FRONTEND_URL}/invite/project/${invite.token}`;
-  await sendProjectInviteEmail(
-    dto.email,
-    project.name,
-    inviteUrl,
-    inviter?.name ?? "Un miembro del equipo"
-  );
 
-  return { message: "Invitation sent" };
+  // [DEMO] Email invite disabled (no Resend sending domain configured yet).
+  // Instead of emailing, we return the invite link so the admin can share it.
+  // To re-enable: re-import sendProjectInviteEmail and call it here.
+  return {
+    inviteUrl,
+    token: invite.token,
+    expiresAt: invite.expiresAt,
+    message: "Invite created — share this link (email sending is disabled)",
+  };
 }
 
 export async function getInviteInfo(token: string) {

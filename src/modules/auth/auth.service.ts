@@ -60,20 +60,18 @@ export async function register(dto: RegisterDto) {
   if (!memberRole) throw new AppError("Role configuration error", 500);
 
   const passwordHash = await argon2.hash(dto.password);
-  const code = generateCode();
-  const expires = codeExpiry();
 
+  // [DEMO] Email verification disabled: users are auto-verified on register.
+  // To re-enable: set emailVerified:false, pass emailVerificationCode/expires,
+  // and call sendVerificationEmail(dto.email, code) once a Resend sending
+  // domain is verified.
   const user = await createUser({
     name: dto.name,
     email: dto.email,
     passwordHash,
     roleId: memberRole.id,
-    emailVerified: false,
-    emailVerificationCode: code,
-    emailVerificationExpires: expires,
+    emailVerified: true,
   });
-
-  await sendVerificationEmail(dto.email, code);
 
   // Fire-and-forget: create support chat with super admin
   void ensureSupportChat(user.id).catch(console.error);
@@ -128,9 +126,7 @@ export async function login(dto: LoginDto) {
   const valid = await argon2.verify(user.passwordHash, dto.password);
   if (!valid) throw new AppError(INVALID_CREDENTIALS, 401);
 
-  if (!user.emailVerified) {
-    throw new AppError("Please verify your email before logging in", 403);
-  }
+  // [DEMO] Email verification check disabled.
 
   const { token, roleName } = await issueToken(user);
   const safeUser = { id: user.id, name: user.name, email: user.email, roleId: user.roleId, role: { name: roleName } };
