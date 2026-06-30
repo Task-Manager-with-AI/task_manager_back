@@ -29,11 +29,15 @@ const audioUpload = multer({
   },
 });
 
-// LLM calls are costly — throttle the ask endpoint per IP.
+// LLM calls are costly: all users share one hourly pool for Copilot questions.
 const askLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 20,
-  message: { success: false, message: "Too many requests, try again later" },
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  keyGenerator: () => "global-copilot-ask",
+  message: {
+    success: false,
+    message: "Copilot hourly question limit exceeded. Try again later.",
+  },
   standardHeaders: true,
   legacyHeaders: false,
 });

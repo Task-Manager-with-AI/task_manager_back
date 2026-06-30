@@ -1,4 +1,5 @@
 import { Router, type Router as ExpressRouter } from "express";
+import rateLimit from "express-rate-limit";
 import multer from "multer";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { membershipMiddleware } from "../../middlewares/membership.middleware";
@@ -21,6 +22,18 @@ const upload = multer({
   limits: { fileSize: 200 * 1024 * 1024 },
 });
 
+const createMeetingLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 6,
+  keyGenerator: (req) => req.user?.id ?? "anonymous",
+  message: {
+    success: false,
+    message: "Meeting creation limit exceeded. Try again later.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Global meetings list (all projects the user can access)
 meetingsRouter.get("/meetings", authMiddleware, listAllMeetingsController);
 
@@ -35,6 +48,7 @@ meetingsRouter.post(
   "/projects/:projectId/meetings",
   authMiddleware,
   membershipMiddleware,
+  createMeetingLimiter,
   createMeetingController
 );
 
