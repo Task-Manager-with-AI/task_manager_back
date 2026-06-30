@@ -3,6 +3,7 @@ import { authMiddleware } from "../../middlewares/auth.middleware";
 import { membershipMiddleware } from "../../middlewares/membership.middleware";
 import {
   listTasksController,
+  listBacklogController,
   getTaskController,
   createTaskController,
   updateTaskController,
@@ -35,6 +36,13 @@ tasksRouter.get(
   authMiddleware,
   membershipMiddleware,
   listTasksController
+);
+
+tasksRouter.get(
+  "/projects/:projectId/tasks/backlog",
+  authMiddleware,
+  membershipMiddleware,
+  listBacklogController
 );
 
 /**

@@ -236,7 +236,7 @@ model Task {
   description    String?
   dueDate        DateTime?
   priority       TaskPriority    @default(MEDIUM)
-  columnId       String
+  columnId       String?
   projectId      String
   sprintId       String?
   storyPoints    Int             @default(1)
@@ -246,7 +246,7 @@ model Task {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   project        Project         @relation(fields: [projectId], references: [id])
-  column         KanbanColumn    @relation(fields: [columnId], references: [id])
+  column         KanbanColumn?   @relation(fields: [columnId], references: [id])
   sprint         Sprint?         @relation(fields: [sprintId], references: [id])
   createdBy      User            @relation("TaskCreator", fields: [createdById], references: [id])
   responsible    User?           @relation("TaskResponsible", fields: [responsibleId], references: [id])

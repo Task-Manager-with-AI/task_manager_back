@@ -6,6 +6,7 @@ import {
 } from "./tasks.schema";
 import {
   listProjectTasks,
+  listBacklog,
   getTask,
   createNewTask,
   updateExistingTask,
@@ -20,7 +21,21 @@ export async function listTasksController(
   next: NextFunction
 ) {
   try {
-    const tasks = await listProjectTasks(req.params["projectId"] as string);
+    const scope = req.query["scope"] as "backlog" | "kanban" | "all" | undefined;
+    const tasks = await listProjectTasks(req.params["projectId"] as string, scope);
+    sendSuccess(res, tasks);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function listBacklogController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const tasks = await listBacklog(req.params["projectId"] as string);
     sendSuccess(res, tasks);
   } catch (err) {
     next(err);
