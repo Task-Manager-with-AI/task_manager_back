@@ -22,6 +22,7 @@ import { invitesRouter } from "./modules/invites/invites.routes";
 import { adminRouter } from "./modules/admin/admin.routes";
 import { feedbackRouter } from "./modules/feedback/feedback.routes";
 import { supportRouter } from "./modules/support/support.routes";
+import { sprintsRouter } from "./modules/sprints/sprints.routes";
 import path from "path";
 import { env } from "./config/env";
 
@@ -56,6 +57,7 @@ app.use("/api/v1", invitesRouter);
 app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1", feedbackRouter);
 app.use("/api/v1", supportRouter);
+app.use("/api/v1", sprintsRouter);
 
 // Static audio uploads (only for development; behind auth in real prod)
 app.use(

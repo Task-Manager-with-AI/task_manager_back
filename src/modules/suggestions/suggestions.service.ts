@@ -10,7 +10,6 @@ import type {
   UpdateSuggestionDto,
 } from "./suggestions.schema";
 import { TaskPriority } from "@prisma/client";
-import { findFirstColumnId } from "../tasks/tasks.repository";
 
 export async function listMinuteSuggestions(minuteId: string, userId: string) {
   const minute = await findMinuteWithMembership(minuteId, userId);
@@ -90,11 +89,6 @@ export async function acceptSuggestion(
     dto.description === undefined ? suggestion.description : dto.description;
   const finalPriority = (dto.priority ?? suggestion.priority) as TaskPriority;
 
-  const columnId = await findFirstColumnId(projectId);
-  if (!columnId) {
-    throw new AppError("Kanban columns are not configured for this project", 500);
-  }
-
   const result = await prisma.$transaction(async (tx) => {
     const task = await tx.task.create({
       data: {
@@ -102,7 +96,7 @@ export async function acceptSuggestion(
         description: finalDescription ?? undefined,
         priority: finalPriority,
         projectId,
-        columnId,
+        // No columnId/sprintId → task lands in the Product Backlog
         createdById: userId,
         responsibleId: responsibleId ?? undefined,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,

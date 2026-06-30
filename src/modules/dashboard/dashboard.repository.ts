@@ -190,7 +190,7 @@ export async function groupTasksByColumn(projectIds: string[]) {
     _count: { id: true },
   });
 
-  const columnIds = tasks.map((t) => t.columnId);
+  const columnIds = tasks.map((t) => t.columnId).filter((id): id is string => id !== null);
   const columns = await prisma.kanbanColumn.findMany({
     where: { id: { in: columnIds } },
     select: { id: true, title: true, color: true },
@@ -199,7 +199,7 @@ export async function groupTasksByColumn(projectIds: string[]) {
   const columnMap = new Map(columns.map((c) => [c.id, c]));
 
   return tasks.map((t) => {
-    const col = columnMap.get(t.columnId);
+    const col = t.columnId ? columnMap.get(t.columnId) : undefined;
     return {
       column: col?.title ?? "Unknown",
       count: t._count.id,

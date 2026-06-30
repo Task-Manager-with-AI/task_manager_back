@@ -8,12 +8,43 @@ const taskInclude = {
   column: { select: { id: true, title: true, color: true, position: true } },
 };
 
-export async function findTasksByProject(projectId: string) {
+export async function findTasksByProject(
+  projectId: string,
+  scope?: "backlog" | "kanban" | "all"
+) {
+  let where: Record<string, unknown> = { projectId };
+
+  if (scope === "backlog") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    where = { projectId, sprintId: null, columnId: null } as any;
+  } else if (scope === "kanban") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    where = { projectId, columnId: { not: null } } as any;
+  }
+
   return prisma.task.findMany({
-    where: { projectId },
+    where,
     include: taskInclude,
     orderBy: { createdAt: "desc" },
   });
+}
+
+export async function findBacklogTasks(projectId: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return prisma.task.findMany({
+    where: { projectId, sprintId: null, columnId: null } as any,
+    include: taskInclude,
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function findDoneColumnIdFn(projectId: string) {
+  const column = await prisma.kanbanColumn.findFirst({
+    where: { projectId },
+    orderBy: { position: "desc" },
+    select: { id: true },
+  });
+  return column?.id ?? null;
 }
 
 export async function findTaskById(id: string) {
@@ -45,11 +76,14 @@ export async function createTask(data: {
   dueDate?: Date;
   priority: TaskPriority;
   projectId: string;
-  columnId: string;
+  columnId?: string | null;
+  sprintId?: string | null;
+  storyPoints?: number;
   createdById: string;
   responsibleId?: string;
 }) {
-  return prisma.task.create({ data, include: taskInclude });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return prisma.task.create({ data: data as any, include: taskInclude });
 }
 
 export async function updateTask(
@@ -60,6 +94,8 @@ export async function updateTask(
     dueDate?: Date | null;
     priority?: TaskPriority;
     responsibleId?: string | null;
+    sprintId?: string | null;
+    storyPoints?: number;
   }
 ) {
   return prisma.task.update({ where: { id }, data, include: taskInclude });

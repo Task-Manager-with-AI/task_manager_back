@@ -2,6 +2,7 @@ import { prisma } from "../../prisma/client";
 import { AppError } from "../../shared/errors/AppError";
 import {
   findTasksByProject,
+  findBacklogTasks,
   findTaskWithMembership,
   findFirstColumnId,
   createTask,
@@ -16,8 +17,15 @@ import { enqueueSafe } from "../copilot/indexing/indexing.service";
 import { deleteBySource } from "../copilot/indexing/knowledge.repository";
 import { notifySafe } from "../notifications/notifications.service";
 
-export async function listProjectTasks(projectId: string) {
-  return findTasksByProject(projectId);
+export async function listProjectTasks(
+  projectId: string,
+  scope?: "backlog" | "kanban" | "all"
+) {
+  return findTasksByProject(projectId, scope);
+}
+
+export async function listBacklog(projectId: string) {
+  return findBacklogTasks(projectId);
 }
 
 export async function getTask(taskId: string, userId: string) {
@@ -42,15 +50,15 @@ export async function createNewTask(
     }
   }
 
-  let columnId = dto.columnId;
+  let columnId: string | null = dto.columnId ?? null;
+
   if (columnId) {
     const column = await findColumnById(columnId, projectId);
     if (!column) throw new AppError("Column not found in this project", 400);
-  } else {
-    columnId = (await findFirstColumnId(projectId)) ?? undefined;
-    if (!columnId) {
-      throw new AppError("Kanban columns are not configured for this project", 500);
-    }
+  } else if (!dto.sprintId) {
+    // No sprint and no column → goes to Product Backlog (columnId stays null)
+    // If there IS a sprint, tasks go to Sprint Backlog (also columnId null until sprint starts)
+    columnId = null;
   }
 
   const created = await createTask({
@@ -60,6 +68,8 @@ export async function createNewTask(
     priority: dto.priority as TaskPriority,
     projectId,
     columnId,
+    sprintId: dto.sprintId ?? null,
+    storyPoints: dto.storyPoints ?? 1,
     createdById,
     responsibleId: dto.responsibleId,
   });
@@ -100,6 +110,8 @@ export async function updateExistingTask(
     dueDate: dto.dueDate ? new Date(dto.dueDate) : dto.dueDate === null ? null : undefined,
     priority: dto.priority as TaskPriority | undefined,
     responsibleId: dto.responsibleId,
+    sprintId: dto.sprintId,
+    storyPoints: dto.storyPoints,
   });
   enqueueSafe(task.projectId, "TASK", taskId);
   // Notify the newly assigned responsible (if it changed to someone else).
